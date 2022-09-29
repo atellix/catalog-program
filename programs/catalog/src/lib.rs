@@ -9,15 +9,26 @@ pub enum URLExpandMode {
     AppendUUID,     // 1 - Convert the 'uuid' field to a lowercase UUID and then append: '/[UUID]' to the URL
 }
 
-
 #[program]
 pub mod catalog {
     use super::*;
-    pub fn create_url(ctx: Context<CreateURL>) -> ProgramResult {
+    pub fn create_url(
+        ctx: Context<CreateURL>,
+        inp_url_expand_mode: u8,
+        inp_url_hash: u128,
+        inp_url: String,
+    ) -> ProgramResult {
+        msg!("URL Expand Mode: {}", inp_url_expand_mode.as_str());
+        msg!("URL Hash: {}", inp_url_hash.as_str());
+        msg!("URL: {}", inp_url.as_str());
         Ok(())
     }
 
-    pub fn create_listing(ctx: Context<CreateListing>) -> ProgramResult {
+    pub fn create_listing(
+        ctx: Context<CreateListing>,
+        inp_category: u128,
+    ) -> ProgramResult {
+        msg!("Category: {}", inp_category.as_str());
         Ok(())
     }
 }
