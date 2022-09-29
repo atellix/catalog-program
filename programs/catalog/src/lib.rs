@@ -17,9 +17,9 @@ pub mod catalog {
         inp_url_expand_mode: u8,
         inp_url_hash: u128,
         inp_url: String,
-    ) -> ProgramResult {
-        msg!("URL Expand Mode: {}", inp_url_expand_mode.as_str());
-        msg!("URL Hash: {}", inp_url_hash.as_str());
+    ) -> anchor_lang::Result<()> {
+        msg!("URL Expand Mode: {}", inp_url_expand_mode.to_string());
+        msg!("URL Hash: {}", inp_url_hash.to_string());
         msg!("URL: {}", inp_url.as_str());
         Ok(())
     }
@@ -27,30 +27,34 @@ pub mod catalog {
     pub fn create_listing(
         ctx: Context<CreateListing>,
         inp_category: u128,
-    ) -> ProgramResult {
-        msg!("Category: {}", inp_category.as_str());
+    ) -> anchor_lang::Result<()> {
+        msg!("Category: {}", inp_category.to_string());
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(inp_category: u128, inp_uuid: u128)
-pub struct CreateListing {
+#[instruction(inp_category: u128, inp_uuid: u128)]
+pub struct CreateListing<'info> {
     #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_le_bytes().as_ref()], bump, payer = admin, space = 104)]
     pub entry: Account<'info, CatalogEntry>,
     /// CHECK: ok
     pub merchant: UncheckedAccount<'info>,
     /// CHECK: ok
     pub url: UncheckedAccount<'info>,
+    #[account(mut)]
     pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 #[instruction(inp_url_expand_mode: u8, inp_url_hash: u128)]
-pub struct CreateURL {
+pub struct CreateURL<'info> {
     #[account(init, seeds = [inp_url_expand_mode.to_le_bytes().as_ref(), inp_url_hash.to_le_bytes().as_ref()], bump, payer = admin, space = 140)]
     pub url: Account<'info, CatalogURL>,
+    #[account(mut)]
     pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
