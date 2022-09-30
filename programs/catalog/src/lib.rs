@@ -19,11 +19,7 @@ pub mod catalog {
         inp_url_hash: u128,
         inp_url: String,
     ) -> anchor_lang::Result<()> {
-        msg!("URL Expand Mode: {}", inp_url_expand_mode.to_string());
-        msg!("URL: {}", inp_url.as_str());
-        msg!("URL Input Hash: {}", inp_url_hash.to_string());
         let confirm_hash: u128 = u128::from_be_bytes(md5::compute(&inp_url).into());
-        msg!("URL Calculated Hash: {}", confirm_hash.to_string());
         require!(confirm_hash == inp_url_hash, ErrorCode::InvalidURLHash);
         // TODO: validate expand mode
         let url_entry = &mut ctx.accounts.url_entry;
@@ -34,11 +30,24 @@ pub mod catalog {
 
     pub fn create_listing(
         ctx: Context<CreateListing>,
-        inp_category: u128,
         inp_uuid: u128,
+        inp_category: u128,
+        inp_locality_1: u128, // region
+        inp_locality_2: u128, // service area (if different)
+        inp_latitude: i32,
+        inp_longitude: i32,
     ) -> anchor_lang::Result<()> {
-        msg!("Category: {}", inp_category.to_string());
-        msg!("UUID: {}", inp_uuid.to_string());
+        let listing_entry = &mut ctx.accounts.listing;
+        listing_entry.uuid = inp_uuid;
+        listing_entry.category = inp_category;
+        listing_entry.locality[0] = inp_locality_1;
+        listing_entry.locality[1] = inp_locality_2;
+        listing_entry.latitude = inp_latitude;
+        listing_entry.longitude = inp_longitude;
+        listing_entry.merchant = ctx.accounts.merchant.key();
+        listing_entry.label_url = ctx.accounts.label_url.key();
+        listing_entry.listing_url = ctx.accounts.listing_url.key();
+        listing_entry.address_url = ctx.accounts.address_url.key();
         Ok(())
     }
 }
@@ -46,12 +55,16 @@ pub mod catalog {
 #[derive(Accounts)]
 #[instruction(inp_category: u128, inp_uuid: u128)]
 pub struct CreateListing<'info> {
-    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 104)]
-    pub entry: Account<'info, CatalogEntry>,
+    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 208)]
+    pub listing: Account<'info, CatalogEntry>,
     /// CHECK: ok
     pub merchant: UncheckedAccount<'info>,
     /// CHECK: ok
-    pub url_entry: UncheckedAccount<'info>,
+    pub listing_url: UncheckedAccount<'info>,
+    /// CHECK: ok
+    pub label_url: UncheckedAccount<'info>,
+    /// CHECK: ok
+    pub address_url: UncheckedAccount<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -72,10 +85,15 @@ pub struct CreateURL<'info> {
 pub struct CatalogEntry {
     pub uuid: u128,
     pub category: u128,
+    pub locality: [u128; 2], // typically: country/region/state, city/zipcode
+    pub latitude: i32, // latitude * 10^7
+    pub longitude: i32, // logitude * 10^7
     pub merchant: Pubkey,
-    pub url: Pubkey,
+    pub listing_url: Pubkey,
+    pub label_url: Pubkey,
+    pub address_url: Pubkey,
 }
-// Space = 8 + 16 + 16 + 32 + 32 = 104
+// Space = 8 + 16 + 16 + (16 * 2) + 4 + 4 + (32 * 4) = 208
 
 #[account]
 #[derive(Default)]

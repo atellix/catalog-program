@@ -32,7 +32,7 @@ async function getURLEntry(url, expand = 0) {
 async function main() {
     console.log('Catalog Program: ' + catalogProgramPK.toString())
     
-    var url1 = 'https://rdf.atellix.net/catalog/listing/'
+    var url1 = 'https://rdf.atellix.net/catalog/listing/#1/'
     var urlMode = 1
     var urlEntry = await getURLEntry(url1, urlMode)
     var hashInt = getHashBN(url1)
@@ -55,13 +55,26 @@ async function main() {
     if (true) {
         var merchant = provider.wallet.publicKey
         var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
-        var listingId = uuidv4()
+        var locality1 = getHashBN('https://www.geonames.org/5165418/') // Ohio
+        var locality2 = getHashBN('https://www.geonames.org/4520760/') // Oxford
+        var locality3 = getHashBN('https://rdf.atellix.net/locality/country/us/zipcode/45056')
+        var locality4 = getHashBN('https://rdf.atellix.net/locality/country/us/address/508%20Edgehill%20Dr.%0AOxford%2C%20OH%2045056')
+        //var listingId = uuidv4()
+        var listingId = 'de460569-1712-40dc-8ef8-e9d0e4035e1b'
         var listingBuf = Buffer.from(uuidparse(listingId))
         var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
+        //console.log(listingId)
         console.log(listingId)
-        console.log(await catalogProgram.rpc.createListing(
+        console.log(listingEntry.pubkey)
+        /*console.log(await catalogProgram.rpc.createListing(
             category,
             new anchor.BN(uuidparse(listingId)),
+            locality1,
+            locality2,
+            locality3,
+            locality4,
+            new anchor.BN('395016838'),
+            new anchor.BN('-847512854'),
             {
                 'accounts': {
                     merchant: provider.wallet.publicKey,
@@ -71,7 +84,7 @@ async function main() {
                     systemProgram: SystemProgram.programId,
                 },
             },
-        ))
+        ))*/
     }
 }
 
