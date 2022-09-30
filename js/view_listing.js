@@ -1,5 +1,5 @@
 const { Buffer } = require('buffer')
-const { v4: uuidv4, parse: uuidparse } = require('uuid')
+const { v4: uuidv4, parse: uuidparse, stringify: uuidstr } = require('uuid')
 const anchor = require('@project-serum/anchor')
 const { PublicKey, SystemProgram } = require('@solana/web3.js')
 const MD5 = require('md5.js')
@@ -29,15 +29,31 @@ async function getURLEntry(url, expand = 0) {
     return new PublicKey(urlEntry.pubkey)
 }
 
+async function decodeURL(listingData, urlEntry) {
+    //console.log('Load: ' + urlEntry.toString())
+    let urlData = await catalogProgram.account.catalogUrl.fetch(urlEntry)
+    if (urlData.urlExpandMode === 0) {             // None
+        return urlData.url
+    } else if (urlData.urlExpandMode === 1) {      // AppendUUID
+        var url = urlData.url
+        var uuid = uuidstr(listingData.uuid.toBuffer().toJSON().data)
+        return url + uuid
+    }
+}
+
 async function main() {
     var merchant = provider.wallet.publicKey
     var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
-    var listingId = 'de460569-1712-40dc-8ef8-e9d0e4035e1b'
+    var listingId = 'eacb5edf-a423-48f6-9fc5-c3ac83d76a7a'
     var listingBuf = Buffer.from(uuidparse(listingId))
     var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
     console.log(listingId)
     console.log(listingEntry.pubkey)
-    console.log(await catalogProgram.account.catalogEntry.fetch(new PublicKey(listingEntry.pubkey)))
+    var listingData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(listingEntry.pubkey))
+    console.log(listingData)
+    console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
+    console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)))
+    console.log('URL: ' + await decodeURL(listingData, listingData.listingUrl))
 }
 
 console.log('Begin')

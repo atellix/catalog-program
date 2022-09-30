@@ -29,19 +29,17 @@ async function getURLEntry(url, expand = 0) {
     return new PublicKey(urlEntry.pubkey)
 }
 
-async function main() {
-    console.log('Catalog Program: ' + catalogProgramPK.toString())
-    
-    var url1 = 'https://rdf.atellix.net/catalog/listing/#1/'
-    var urlMode = 1
-    var urlEntry = await getURLEntry(url1, urlMode)
-    var hashInt = getHashBN(url1)
-
-    if (false) {
+async function findOrCreateURLEntry(url, expand = 0) {
+    console.log('Find or Create URL Entry: ' + url)
+    var urlEntry = await getURLEntry(url, expand)
+    let account = await provider.connection.getAccountInfo(urlEntry)
+    if (!account) {
+        var hashInt = getHashBN(url)
+        console.log('Creating URL Entry: ' + urlEntry)
         console.log(await catalogProgram.rpc.createUrl(
-            urlMode, // URL Mode
+            expand, // URL Mode
             hashInt,
-            url1,
+            url,
             {
                 'accounts': {
                     urlEntry: urlEntry,
@@ -51,40 +49,43 @@ async function main() {
             },
         ))
     }
+    return urlEntry
+}
 
+async function main() {
+    //console.log('Catalog Program: ' + catalogProgramPK.toString())
     if (true) {
-        var merchant = provider.wallet.publicKey
+        var listingUrl = await findOrCreateURLEntry('https://rdf.atellix.net/catalog/listing/1#', 1)
+        var addressUrl = await findOrCreateURLEntry('utf8:4455%20Paradise%20Rd%2C%20Las%20Vegas%2C%20NV%2089169', 0)
+        var labelUrl = await findOrCreateURLEntry('utf8:Hard%20Rock%20Hotel%20%26%20Casino%20Las%20Vegas', 0)
         var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
-        var locality1 = getHashBN('https://www.geonames.org/5165418/') // Ohio
-        var locality2 = getHashBN('https://www.geonames.org/4520760/') // Oxford
-        var locality3 = getHashBN('https://rdf.atellix.net/locality/country/us/zipcode/45056')
-        var locality4 = getHashBN('https://rdf.atellix.net/locality/country/us/address/508%20Edgehill%20Dr.%0AOxford%2C%20OH%2045056')
-        //var listingId = uuidv4()
-        var listingId = 'de460569-1712-40dc-8ef8-e9d0e4035e1b'
+        var locality1 = getHashBN('https://www.geonames.org/6252001/') // United States
+        var locality2 = getHashBN('https://www.geonames.org/5506956/') // Las Vegas
+        var listingId = uuidv4()
         var listingBuf = Buffer.from(uuidparse(listingId))
+        var merchant = provider.wallet.publicKey
         var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
-        //console.log(listingId)
-        console.log(listingId)
-        console.log(listingEntry.pubkey)
-        /*console.log(await catalogProgram.rpc.createListing(
-            category,
+        console.log('Listing UUID: ' + listingId)
+        console.log('Create Listing: ' + listingEntry.pubkey)
+        console.log(await catalogProgram.rpc.createListing(
             new anchor.BN(uuidparse(listingId)),
+            category,
             locality1,
             locality2,
-            locality3,
-            locality4,
-            new anchor.BN('395016838'),
-            new anchor.BN('-847512854'),
+            new anchor.BN('361102529'),
+            new anchor.BN('-1151554332'),
             {
                 'accounts': {
                     merchant: provider.wallet.publicKey,
-                    entry: new PublicKey(listingEntry.pubkey),
-                    urlEntry: urlEntry,
+                    listing: new PublicKey(listingEntry.pubkey),
+                    listingUrl: listingUrl,
+                    addressUrl: addressUrl,
+                    labelUrl: labelUrl,
                     admin: provider.wallet.publicKey,
                     systemProgram: SystemProgram.programId,
                 },
             },
-        ))*/
+        ))
     }
 }
 

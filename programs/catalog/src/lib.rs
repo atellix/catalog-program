@@ -1,13 +1,13 @@
 use md5;
 use anchor_lang::prelude::*;
 
-declare_id!("2gDsdGLeBihWuV8LENxXbRZf5EtGEPxobyxJNjdRV9uG");
+declare_id!("5d5S1Ea4njjZUjr8fqLZb8uQgqGH1TxoN2EByAuzBnyr");
 
 #[repr(u8)]
 #[derive(PartialEq, Debug, Eq, Copy, Clone)] // TryFromPrimitive
 pub enum URLExpandMode {
     None,           // 0 - Do not expand (full URL provided)
-    AppendUUID,     // 1 - Convert the 'uuid' field to a lowercase UUID and then append: '/[UUID]' to the URL
+    AppendUUID,     // 1 - Convert the 'uuid' field to a lowercase UUID and then append the UUID to the URL
 }
 
 #[program]
@@ -37,6 +37,7 @@ pub mod catalog {
         inp_latitude: i32,
         inp_longitude: i32,
     ) -> anchor_lang::Result<()> {
+        let clock = Clock::get()?;
         let listing_entry = &mut ctx.accounts.listing;
         listing_entry.uuid = inp_uuid;
         listing_entry.category = inp_category;
@@ -48,14 +49,16 @@ pub mod catalog {
         listing_entry.label_url = ctx.accounts.label_url.key();
         listing_entry.listing_url = ctx.accounts.listing_url.key();
         listing_entry.address_url = ctx.accounts.address_url.key();
+        listing_entry.update_count = 1;
+        listing_entry.update_ts = clock.unix_timestamp;
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(inp_category: u128, inp_uuid: u128)]
+#[instruction(inp_uuid: u128, inp_category: u128)]
 pub struct CreateListing<'info> {
-    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 208)]
+    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 224)]
     pub listing: Account<'info, CatalogEntry>,
     /// CHECK: ok
     pub merchant: UncheckedAccount<'info>,
@@ -73,8 +76,8 @@ pub struct CreateListing<'info> {
 #[derive(Accounts)]
 #[instruction(inp_url_expand_mode: u8, inp_url_hash: u128)]
 pub struct CreateURL<'info> {
-    #[account(init, seeds = [inp_url_expand_mode.to_be_bytes().as_ref(), inp_url_hash.to_be_bytes().as_ref()], bump, payer = admin, space = 140)]
-    pub url_entry: Account<'info, CatalogURL>,
+    #[account(init, seeds = [inp_url_expand_mode.to_be_bytes().as_ref(), inp_url_hash.to_be_bytes().as_ref()], bump, payer = admin, space = 141)]
+    pub url_entry: Account<'info, CatalogUrl>,
     #[account(mut)]
     pub admin: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -83,25 +86,27 @@ pub struct CreateURL<'info> {
 #[account]
 #[derive(Default)]
 pub struct CatalogEntry {
-    pub uuid: u128,
     pub category: u128,
     pub locality: [u128; 2], // typically: country/region/state, city/zipcode
+    pub uuid: u128,
     pub latitude: i32, // latitude * 10^7
     pub longitude: i32, // logitude * 10^7
+    pub update_ts: i64,
+    pub update_count: u64,
     pub merchant: Pubkey,
     pub listing_url: Pubkey,
     pub label_url: Pubkey,
     pub address_url: Pubkey,
 }
-// Space = 8 + 16 + 16 + (16 * 2) + 4 + 4 + (32 * 4) = 208
+// Space = 8 + 16 + (16 * 2) + 16 + 4 + 4 + 8 + 8 + (32 * 4) = 224
 
 #[account]
 #[derive(Default)]
-pub struct CatalogURL {
+pub struct CatalogUrl {
     pub url_expand_mode: u8,
     pub url: String, // Len 128
 }
-// Space = 8 + 132 = 140
+// Space = 8 + 1 + 132 = 141
 
 #[error_code]
 pub enum ErrorCode {
