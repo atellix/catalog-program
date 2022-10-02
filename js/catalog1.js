@@ -60,7 +60,8 @@ async function main() {
         var labelUrl = await findOrCreateURLEntry('utf8:Hard%20Rock%20Hotel%20%26%20Casino%20Las%20Vegas', 0)
         var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
         var locality1 = getHashBN('https://www.geonames.org/6252001/') // United States
-        var locality2 = getHashBN('https://www.geonames.org/5506956/') // Las Vegas
+        var locality2 = getHashBN('https://www.geonames.org/5509151/') // Nevada
+        var locality3 = getHashBN('https://www.geonames.org/5506956/') // Las Vegas
         var listingId = uuidv4()
         var listingBuf = Buffer.from(uuidparse(listingId))
         var merchant = provider.wallet.publicKey
@@ -72,6 +73,7 @@ async function main() {
             category,
             locality1,
             locality2,
+            locality3,
             new anchor.BN('361102529'),
             new anchor.BN('-1151554332'),
             {

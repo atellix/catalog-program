@@ -1,7 +1,7 @@
 use md5;
 use anchor_lang::prelude::*;
 
-declare_id!("5d5S1Ea4njjZUjr8fqLZb8uQgqGH1TxoN2EByAuzBnyr");
+declare_id!("AJstvQiM2uSXWKx1nUDJQMfhGkBAKZ2UWgGD77Juz5g7");
 
 #[repr(u8)]
 #[derive(PartialEq, Debug, Eq, Copy, Clone)] // TryFromPrimitive
@@ -32,8 +32,9 @@ pub mod catalog {
         ctx: Context<CreateListing>,
         inp_uuid: u128,
         inp_category: u128,
-        inp_locality_1: u128, // region
-        inp_locality_2: u128, // service area (if different)
+        inp_locality_1: u128, // country
+        inp_locality_2: u128, // region
+        inp_locality_3: u128, // local area
         inp_latitude: i32,
         inp_longitude: i32,
     ) -> anchor_lang::Result<()> {
@@ -43,6 +44,7 @@ pub mod catalog {
         listing_entry.category = inp_category;
         listing_entry.locality[0] = inp_locality_1;
         listing_entry.locality[1] = inp_locality_2;
+        listing_entry.locality[2] = inp_locality_3;
         listing_entry.latitude = inp_latitude;
         listing_entry.longitude = inp_longitude;
         listing_entry.merchant = ctx.accounts.merchant.key();
@@ -58,7 +60,7 @@ pub mod catalog {
 #[derive(Accounts)]
 #[instruction(inp_uuid: u128, inp_category: u128)]
 pub struct CreateListing<'info> {
-    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 224)]
+    #[account(init, seeds = [merchant.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 240)]
     pub listing: Account<'info, CatalogEntry>,
     /// CHECK: ok
     pub merchant: UncheckedAccount<'info>,
@@ -87,7 +89,7 @@ pub struct CreateURL<'info> {
 #[derive(Default)]
 pub struct CatalogEntry {
     pub category: u128,
-    pub locality: [u128; 2], // typically: country/region/state, city/zipcode
+    pub locality: [u128; 3], // typically: country, region/state, city
     pub uuid: u128,
     pub latitude: i32, // latitude * 10^7
     pub longitude: i32, // logitude * 10^7
@@ -98,7 +100,7 @@ pub struct CatalogEntry {
     pub label_url: Pubkey,
     pub address_url: Pubkey,
 }
-// Space = 8 + 16 + (16 * 2) + 16 + 4 + 4 + 8 + 8 + (32 * 4) = 224
+// Space = 8 + 16 + (16 * 3) + 16 + 4 + 4 + 8 + 8 + (32 * 4) = 240
 
 #[account]
 #[derive(Default)]
