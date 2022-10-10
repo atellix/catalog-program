@@ -54,14 +54,17 @@ async function findOrCreateURLEntry(url, expand = 0) {
 
 async function main() {
     //console.log('Catalog Program: ' + catalogProgramPK.toString())
+
     if (true) {
         var listingUrl = await findOrCreateURLEntry('https://rdf.atellix.net/catalog/listing/1#', 1)
-        var addressUrl = await findOrCreateURLEntry('utf8:4455%20Paradise%20Rd%2C%20Las%20Vegas%2C%20NV%2089169', 0)
-        var labelUrl = await findOrCreateURLEntry('utf8:Hard%20Rock%20Hotel%20%26%20Casino%20Las%20Vegas', 0)
-        var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
+        var addressUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent('40643 Grimmer Blvd, Fremont, CA 94538'), 0)
+        var labelUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent('Andalusia Day Spa'), 0)
+        var latitude = '375355570'
+        var longitude = '-1219840115'
+        var category = getHashBN('http://www.productontology.org/doc/Massage')
         var locality1 = getHashBN('https://www.geonames.org/6252001/') // United States
-        var locality2 = getHashBN('https://www.geonames.org/5509151/') // Nevada
-        var locality3 = getHashBN('https://www.geonames.org/5506956/') // Las Vegas
+        var locality2 = getHashBN('https://www.geonames.org/5332921/') // California
+        var locality3 = getHashBN('https://www.geonames.org/5350736/') // Fremont
         var listingId = uuidv4()
         var listingBuf = Buffer.from(uuidparse(listingId))
         var merchant = provider.wallet.publicKey
@@ -74,8 +77,8 @@ async function main() {
             locality1,
             locality2,
             locality3,
-            new anchor.BN('361102529'),
-            new anchor.BN('-1151554332'),
+            new anchor.BN(latitude),
+            new anchor.BN(longitude),
             {
                 'accounts': {
                     merchant: provider.wallet.publicKey,

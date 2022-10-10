@@ -44,11 +44,26 @@ async function decodeURL(listingData, urlEntry) {
 
 async function main() {
     var merchant = provider.wallet.publicKey
-    var category = getHashBN('https://rdf.atellix.net/catalog/category/Stuff')
+    var category = getHashBN('http://www.productontology.org/doc/Massage')
     var prefix = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
     var catdata = category.toBuffer().toJSON().data
     catdata.reverse() // Borsh uses little-endian integers
     prefix = prefix.concat(catdata)
+
+    if (true) {
+        var local = [
+            //'https://www.geonames.org/6251999/', // Canada
+            'https://www.geonames.org/6252001/', // USA
+            'https://www.geonames.org/5332921/', // California
+        ]
+        for (var i = 0; i < local.length; i++) {
+            var localHash = getHashBN(local[i])
+            var localData = localHash.toBuffer().toJSON().data
+            localData.reverse() // Borsh uses little-endian integers
+            prefix = prefix.concat(localData)
+        }
+    }
+
     var query = await provider.connection.getProgramAccounts(catalogProgramPK, {
         filters: [
             { memcmp: { bytes: bs58.encode(prefix), offset: 0 } }
@@ -57,18 +72,34 @@ async function main() {
     for (var i = 0; i < query.length; i++) {
         var act = query[i]
         console.log('Found: ' + act.pubkey.toString())
-    }
 
-/*    var listingId = '3c57b887-96c3-4263-b437-39420c7ea541'
-    var listingBuf = Buffer.from(uuidparse(listingId))
-    var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
-    console.log(listingId)
-    console.log(listingEntry.pubkey)
-    var listingData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(listingEntry.pubkey))
-    console.log(listingData)
-    console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
-    console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)))
-    console.log('URL: ' + await decodeURL(listingData, listingData.listingUrl)) */
+        //var listingId = '3c57b887-96c3-4263-b437-39420c7ea541'
+        //var listingBuf = Buffer.from(uuidparse(listingId))
+        var listingData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(act.pubkey))
+        //console.log(listingData)
+        var lat = null
+        var lon = null
+        if (Math.abs(listingData.latitude) < 2000000000 && Math.abs(listingData.longitude) < 2000000000) {
+            lat = listingData.latitude / (10 ** 7)
+            lon = listingData.longitude / (10 ** 7)
+        }
+        var rec = {
+            'url': await decodeURL(listingData, listingData.listingUrl),
+            'uuid': uuidstr(listingData.uuid.toBuffer().toJSON().data),
+            'label': decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)),
+            'address': decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)),
+            'latitude': lat,
+            'longitude': lon,
+            'merchant_key': listingData.merchant.toString(),
+            'update_count': parseInt(listingData.updateCount.toString()),
+            'update_ts': new Date(1000 * parseInt(listingData.updateTs.toString())),
+        }
+        console.log(rec)
+        /*console.log('UUID: ' + uuidstr(listingData.uuid.toBuffer().toJSON().data))
+        console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
+        console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)))
+        console.log('URL: ' + await decodeURL(listingData, listingData.listingUrl))*/
+    }
 }
 
 console.log('Begin')
