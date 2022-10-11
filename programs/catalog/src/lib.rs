@@ -55,6 +55,12 @@ pub mod catalog {
         listing_entry.update_ts = clock.unix_timestamp;
         Ok(())
     }
+
+    pub fn remove_listing(
+        _ctx: Context<RemoveListing>,
+    ) -> anchor_lang::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -73,6 +79,16 @@ pub struct CreateListing<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+// TODO: RBAC
+#[derive(Accounts)]
+pub struct RemoveListing<'info> {
+    #[account(mut, close = fee_recipient)]
+    pub listing: Account<'info, CatalogEntry>,
+    #[account(mut)]
+    pub fee_recipient: Signer<'info>,
+    pub admin: Signer<'info>,
 }
 
 #[derive(Accounts)]

@@ -9,7 +9,7 @@ const bs58 = require('bs58')
 //const exec = promisify(require('child_process').exec)
 //const fs = require('fs').promises
 
-const { programAddress } = require('../../js/atellix-common')
+const { programAddress, jsonFileRead } = require('../../js/atellix-common')
 
 const provider = anchor.AnchorProvider.env()
 anchor.setProvider(provider)
@@ -43,8 +43,10 @@ async function decodeURL(listingData, urlEntry) {
 }
 
 async function main() {
+    var uriLookup = await jsonFileRead('uris.json')
     var merchant = provider.wallet.publicKey
-    var category = getHashBN('http://www.productontology.org/doc/Massage')
+    var categoryUri = 'http://www.productontology.org/doc/Massage'
+    var category = getHashBN(categoryUri)
     var prefix = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
     var catdata = category.toBuffer().toJSON().data
     catdata.reverse() // Borsh uses little-endian integers
@@ -83,7 +85,19 @@ async function main() {
             lat = listingData.latitude / (10 ** 7)
             lon = listingData.longitude / (10 ** 7)
         }
+        var locality = []
+        for (var j = 0; j < listingData.locality.length; j++) {
+            var lc = listingData.locality[j]
+            if (lc.toString() !== '0') {
+                var bhash = bs58.encode(lc.toBuffer())
+                if (typeof uriLookup[bhash] !== 'undefined') {
+                    locality.push(uriLookup[bhash])
+                }
+            }
+        }
         var rec = {
+            'category': categoryUri,
+            'locality': locality,
             'url': await decodeURL(listingData, listingData.listingUrl),
             'uuid': uuidstr(listingData.uuid.toBuffer().toJSON().data),
             'label': decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)),

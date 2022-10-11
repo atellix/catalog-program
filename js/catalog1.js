@@ -52,45 +52,82 @@ async function findOrCreateURLEntry(url, expand = 0) {
     return urlEntry
 }
 
-async function main() {
-    //console.log('Catalog Program: ' + catalogProgramPK.toString())
-
-    if (true) {
-        var listingUrl = await findOrCreateURLEntry('https://rdf.atellix.net/catalog/listing/1#', 1)
-        var addressUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent('40643 Grimmer Blvd, Fremont, CA 94538'), 0)
-        var labelUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent('Andalusia Day Spa'), 0)
-        var latitude = '375355570'
-        var longitude = '-1219840115'
-        var category = getHashBN('http://www.productontology.org/doc/Massage')
-        var locality1 = getHashBN('https://www.geonames.org/6252001/') // United States
-        var locality2 = getHashBN('https://www.geonames.org/5332921/') // California
-        var locality3 = getHashBN('https://www.geonames.org/5350736/') // Fremont
-        var listingId = uuidv4()
-        var listingBuf = Buffer.from(uuidparse(listingId))
-        var merchant = provider.wallet.publicKey
-        var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
-        console.log('Listing UUID: ' + listingId)
-        console.log('Create Listing: ' + listingEntry.pubkey)
-        console.log(await catalogProgram.rpc.createListing(
-            new anchor.BN(uuidparse(listingId)),
-            category,
-            locality1,
-            locality2,
-            locality3,
-            new anchor.BN(latitude),
-            new anchor.BN(longitude),
-            {
-                'accounts': {
-                    merchant: provider.wallet.publicKey,
-                    listing: new PublicKey(listingEntry.pubkey),
-                    listingUrl: listingUrl,
-                    addressUrl: addressUrl,
-                    labelUrl: labelUrl,
-                    admin: provider.wallet.publicKey,
-                    systemProgram: SystemProgram.programId,
-                },
+async function createListing(listingData) {
+    console.log('Create Listing: ')
+    console.log(listingData)
+    var listingUrl = await findOrCreateURLEntry(listingData['base'], 1)
+    var addressUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent(listingData['address']), 0)
+    var labelUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent(listingData['label']), 0)
+    var latitude = listingData['latitude']
+    var longitude = listingData['longitude']
+    var category = getHashBN(listingData['category'])
+    var locality1 = getHashBN(listingData['locality'][0])
+    var locality2 = getHashBN(listingData['locality'][1])
+    var locality3 = getHashBN(listingData['locality'][2])
+    var listingId = uuidv4()
+    var listingBuf = Buffer.from(uuidparse(listingId))
+    var merchant = listingData['merchant']
+    var listingEntry = await programAddress([merchant.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
+    var listing = new PublicKey(listingEntry.pubkey)
+    console.log('Listing UUID: ' + listingId)
+    console.log('Create Listing: ' + listingEntry.pubkey)
+    console.log(await catalogProgram.rpc.createListing(
+        new anchor.BN(uuidparse(listingId)),
+        category,
+        locality1,
+        locality2,
+        locality3,
+        new anchor.BN(latitude),
+        new anchor.BN(longitude),
+        {
+            'accounts': {
+                merchant: provider.wallet.publicKey,
+                listing: listing,
+                listingUrl: listingUrl,
+                addressUrl: addressUrl,
+                labelUrl: labelUrl,
+                admin: provider.wallet.publicKey,
+                systemProgram: SystemProgram.programId,
             },
-        ))
+        },
+    ))
+    return listing
+}
+
+async function main() {
+    var base = 'http://173.234.24.74:9500/api/catalog/'
+    var listings = [
+        {
+            'base': base,
+            'category': 'http://www.productontology.org/doc/Massage',
+            'label': 'MoodUp Wellness',
+            'address': '39039 Paseo Padre Pkwy, Fremont, CA 94538',
+            'latitude': '375536041',
+            'longitude': '-1219825439',
+            'locality': [
+                'https://www.geonames.org/6252001/', // United States
+                'https://www.geonames.org/5332921/', // California
+                'https://www.geonames.org/5350736/', // Fremont
+            ],
+            'merchant': provider.wallet.publicKey,
+        },
+        {
+            'base': base,
+            'category': 'http://www.productontology.org/doc/Massage',
+            'label': 'Andalusia Day Spa',
+            'address': '40643 Grimmer Blvd, Fremont, CA 94538',
+            'latitude': '375355570',
+            'longitude': '-1219840115',
+            'locality': [
+                'https://www.geonames.org/6252001/', // United States
+                'https://www.geonames.org/5332921/', // California
+                'https://www.geonames.org/5350736/', // Fremont
+            ],
+            'merchant': provider.wallet.publicKey,
+        },
+    ]
+    for (var i = 0; i < listings.length; i++) {
+        await createListing(listings[i])
     }
 }
 
