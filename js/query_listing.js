@@ -4,6 +4,7 @@ const anchor = require('@project-serum/anchor')
 const { PublicKey, SystemProgram } = require('@solana/web3.js')
 const MD5 = require('md5.js')
 const bs58 = require('bs58')
+const BitSet = require('bitset')
 //const { TOKEN_PROGRAM_ID } = require('@solana/spl-token')
 //const { promisify } = require('util')
 //const exec = promisify(require('child_process').exec)
@@ -42,9 +43,30 @@ async function decodeURL(listingData, urlEntry) {
     }
 }
 
+function readAttributes(attrValue) {
+    var hval = attrValue.toString(16)
+    var attributes = [
+        'CommerceEngine',
+        'EmploymentRelated',
+        'Event',
+        'InPerson',
+        'LocalDelivery',
+        'OnlineDownload',
+        'Organization',
+        'Person',
+    ]
+    var bset = BitSet('0x' + hval)
+    var attrs = {}
+    for (var i = 0; i < attributes.length; i++) {
+        if (bset.get(i)) {
+            attrs[attributes[i]] = true
+        }
+    }
+    return attrs
+}
+
 async function main() {
     var uriLookup = await jsonFileRead('uris.json')
-    var merchant = provider.wallet.publicKey
     var categoryUri = 'http://www.productontology.org/doc/Massage'
     var category = getHashBN(categoryUri)
     var prefix = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
@@ -104,7 +126,8 @@ async function main() {
             'address': decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)),
             'latitude': lat,
             'longitude': lon,
-            'merchant_key': listingData.merchant.toString(),
+            'owner': listingData.owner.toString(),
+            'attributes': readAttributes(listingData.attributes),
             'update_count': parseInt(listingData.updateCount.toString()),
             'update_ts': new Date(1000 * parseInt(listingData.updateTs.toString())),
         }
