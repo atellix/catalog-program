@@ -40,6 +40,10 @@ async function decodeURL(listingData, urlEntry) {
         var url = urlData.url
         var uuid = uuidstr(listingData.uuid.toBuffer().toJSON().data)
         return url + uuid
+    } else if (urlData.urlExpandMode === 2) {      // UTF8UriEncoded
+        var url = urlData.url
+        var decoded = decodeURIComponent(url)
+        return decoded
     }
 }
 
@@ -69,10 +73,27 @@ async function main() {
     var uriLookup = await jsonFileRead('uris.json')
     var categoryUri = 'http://www.productontology.org/doc/Massage'
     var category = getHashBN(categoryUri)
-    var prefix = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
+    var offset = 0
+    var prefix = []
+
+    // UUID Offset = 8
+    // Catalog ID Offset = 24
+    // Category Offset = 32
+    // Filter By Offset = 48
+
+    offset = 24
+    var catbuf = Buffer.alloc(8)
+    catbuf.writeBigUInt64LE(BigInt(0))
+    prefix = prefix.concat(catbuf.toJSON().data)
+
+    // Category filter
+    //offset = 32
     var catdata = category.toBuffer().toJSON().data
     catdata.reverse() // Borsh uses little-endian integers
     prefix = prefix.concat(catdata)
+
+    //var start = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
+    //prefix = prefix.concat(start)
 
     if (true) {
         var local = [
@@ -87,10 +108,11 @@ async function main() {
             prefix = prefix.concat(localData)
         }
     }
-
+    
+    console.log("Offset: " + offset + " Prefix: " + bs58.encode(prefix))
     var query = await provider.connection.getProgramAccounts(catalogProgramPK, {
         filters: [
-            { memcmp: { bytes: bs58.encode(prefix), offset: 0 } }
+            { memcmp: { bytes: bs58.encode(prefix), offset: offset } }
         ]
     })
     for (var i = 0; i < query.length; i++) {
@@ -108,8 +130,8 @@ async function main() {
             lon = listingData.longitude / (10 ** 7)
         }
         var locality = []
-        for (var j = 0; j < listingData.locality.length; j++) {
-            var lc = listingData.locality[j]
+        for (var j = 0; j < listingData.filterBy.length; j++) {
+            var lc = listingData.filterBy[j]
             if (lc.toString() !== '0') {
                 var bhash = bs58.encode(lc.toBuffer())
                 if (typeof uriLookup[bhash] !== 'undefined') {
@@ -122,8 +144,8 @@ async function main() {
             'locality': locality,
             'url': await decodeURL(listingData, listingData.listingUrl),
             'uuid': uuidstr(listingData.uuid.toBuffer().toJSON().data),
-            'label': decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)),
-            'address': decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)),
+            'label': await decodeURL(listingData, listingData.labelUrl),
+            'address': await decodeURL(listingData, listingData.detailUrl),
             'latitude': lat,
             'longitude': lon,
             'owner': listingData.owner.toString(),
@@ -134,7 +156,7 @@ async function main() {
         console.log(rec)
         /*console.log('UUID: ' + uuidstr(listingData.uuid.toBuffer().toJSON().data))
         console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
-        console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.addressUrl)).substring(5)))
+        console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.detailUrl)).substring(5)))
         console.log('URL: ' + await decodeURL(listingData, listingData.listingUrl))*/
     }
 }

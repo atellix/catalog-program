@@ -22,9 +22,9 @@ function getHashBN(val) {
     return new anchor.BN(hashData)
 }
 
-async function getURLEntry(url, expand = 0) {
+async function getURLEntry(url, expandMode = 0) {
     var bufExpand = Buffer.alloc(1)
-    bufExpand.writeUInt8(expand)
+    bufExpand.writeUInt8(expandMode)
     var bufHash = new MD5().update(url).digest()
     var urlEntry = await programAddress([bufExpand, bufHash], catalogProgramPK)
     return new PublicKey(urlEntry.pubkey)
@@ -103,8 +103,8 @@ async function createListing(listingData) {
     console.log('Create Listing: ')
     console.log(listingData)
     var listingUrl = await findOrCreateURLEntry(listingData['base'], 1)
-    var addressUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent(listingData['address']), 0)
-    var labelUrl = await findOrCreateURLEntry('utf8:' + encodeURIComponent(listingData['label']), 0)
+    var addressUrl = await findOrCreateURLEntry(encodeURIComponent(listingData['address']), 2)
+    var labelUrl = await findOrCreateURLEntry(encodeURIComponent(listingData['label']), 2)
     var latitude = listingData['latitude']
     var longitude = listingData['longitude']
     var category = getHashBN(listingData['category'])
@@ -113,8 +113,12 @@ async function createListing(listingData) {
     var locality3 = getHashBN(listingData['locality'][2])
     var listingId = uuidv4()
     var listingBuf = Buffer.from(uuidparse(listingId))
+    var catalogId = BigInt(0)
     var owner = listingData['owner']
-    var listingEntry = await programAddress([owner.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
+    //var listingEntry = await programAddress([owner.toBuffer(), category.toBuffer(), listingBuf], catalogProgramPK)
+    var catalogBuf = Buffer.alloc(8)
+    catalogBuf.writeBigUInt64BE(catalogId)
+    var listingEntry = await programAddress([catalogBuf, listingBuf], catalogProgramPK)
     var listing = new PublicKey(listingEntry.pubkey)
     var attributes = {}
     if (typeof listingData['attributes'] !== 'undefined') {
@@ -126,6 +130,7 @@ async function createListing(listingData) {
     console.log('Listing UUID: ' + listingId)
     console.log('Create Listing: ' + listingEntry.pubkey)
     console.log(await catalogProgram.rpc.createListing(
+        new anchor.BN(catalogId),
         new anchor.BN(uuidparse(listingId)),
         category,
         locality1,
@@ -139,7 +144,7 @@ async function createListing(listingData) {
                 owner: provider.wallet.publicKey,
                 listing: listing,
                 listingUrl: listingUrl,
-                addressUrl: addressUrl,
+                detailUrl: addressUrl,
                 labelUrl: labelUrl,
                 admin: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,

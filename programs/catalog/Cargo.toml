@@ -17,5 +17,4 @@ default = []
 
 [dependencies]
 anchor-lang = "0.25.0"
-lite-json = { version = "0.2.0", default-features = false, defaults = ["no_std"] }
 md5 = "0.7.0"
