@@ -1,4 +1,5 @@
 use md5;
+use lite_json::json_parser::parse_json;
 use anchor_lang::prelude::*;
 
 declare_id!("6PoXCocdzNvCzKHRibFuxVdfYkWHSw99uGk8QCWTAPsr");
@@ -43,6 +44,7 @@ pub mod catalog {
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
         let listing_entry = &mut ctx.accounts.listing;
+        parse_json(r#"{}"#).expect("Invalid JSON specified!");
         listing_entry.uuid = inp_uuid;
         listing_entry.category = inp_category;
         listing_entry.locality[0] = inp_locality_1;
