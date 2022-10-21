@@ -81,13 +81,13 @@ async function main() {
     // Category Offset = 32
     // Filter By Offset = 48
 
-    offset = 24
+    //offset = 24
     var catbuf = Buffer.alloc(8)
-    catbuf.writeBigUInt64LE(BigInt(0))
-    prefix = prefix.concat(catbuf.toJSON().data)
+    catbuf.writeBigUInt64LE(BigInt(1))
+    //prefix = prefix.concat(catbuf.toJSON().data)
 
     // Category filter
-    //offset = 32
+    offset = 32
     var catdata = category.toBuffer().toJSON().data
     catdata.reverse() // Borsh uses little-endian integers
     prefix = prefix.concat(catdata)
