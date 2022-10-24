@@ -1,5 +1,6 @@
-use md5;
+use crate::program::Catalog;
 use anchor_lang::prelude::*;
+use md5;
 
 declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
 
@@ -14,6 +15,34 @@ pub enum URLExpandMode {
 #[program]
 pub mod catalog {
     use super::*;
+
+    pub fn initialize(ctx: Context<Initialize>) -> anchor_lang::Result<()> {
+        let root = &mut ctx.accounts.root_data;
+        root.catalog_count = 0;
+        Ok(())
+    }
+
+    pub fn create_catalog(
+        ctx: Context<CreateCatalog>,
+    ) -> anchor_lang::Result<()> {
+        let root = &mut ctx.accounts.root_data;
+        let cid = &mut ctx.accounts.catalog_id;
+        cid.catalog = root.next_catalog_id()?;
+        msg!("Allocated Catalog ID: {}", cid.catalog);
+        Ok(())
+    }
+
+    pub fn activate_catalog(
+        ctx: Context<ActivateCatalog>,
+        inp_catalog: u64,
+    ) -> anchor_lang::Result<()> {
+        let cinst = &mut ctx.accounts.catalog_inst;
+        cinst.catalog = inp_catalog;
+        cinst.catalog_owner = ctx.accounts.owner.key();
+        msg!("Activated Catalog ID: {}", cinst.catalog);
+        Ok(())
+    }
+
     pub fn create_url(
         ctx: Context<CreateURL>,
         inp_url_expand_mode: u8,
@@ -71,9 +100,51 @@ pub mod catalog {
 }
 
 #[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(init, seeds = [program_id.as_ref()], bump, payer = program_admin, space = 16)]
+    pub root_data: Account<'info, RootData>,
+    #[account(constraint = program.programdata_address().unwrap() == Some(program_data.key()))]
+    pub program: Program<'info, Catalog>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(program_admin.key()))]
+    pub program_data: Account<'info, ProgramData>,
+    #[account(mut)]
+    pub program_admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CreateCatalog<'info> {
+    #[account(mut, seeds = [program_id.as_ref()], bump)]
+    pub root_data: Account<'info, RootData>,
+    #[account(init, seeds = [b"owner", owner.key().as_ref()], bump, payer = fee_payer, space = 16)]
+    pub catalog_id: Account<'info, CatalogIdentifier>,
+    /// CHECK: ok
+    pub owner: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub fee_payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(inp_catalog: u64)]
+pub struct ActivateCatalog<'info> {
+    #[account(seeds = [b"owner", owner.key().as_ref()], bump)]
+    pub catalog_id: Account<'info, CatalogIdentifier>,
+    #[account(init, seeds = [b"catalog", inp_catalog.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 113)]
+    pub catalog_inst: Account<'info, CatalogInstance>,
+    /// CHECK: ok
+    #[account(constraint = catalog_id.catalog == inp_catalog)]
+    pub owner: Signer<'info>,
+    #[account(mut)]
+    pub fee_payer: Signer<'info>,
+    ///// CHECK: ok
+    //pub net_auth: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 #[instruction(inp_catalog: u64, inp_uuid: u128)]
 pub struct CreateListing<'info> {
-    //#[account(init, seeds = [owner.key().as_ref(), inp_category.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 241)]
     #[account(init, seeds = [inp_catalog.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 249)]
     pub listing: Account<'info, CatalogEntry>,
     /// CHECK: ok
@@ -109,17 +180,39 @@ pub struct CreateURL<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/*#[account]
+#[account]
 #[derive(Default)]
-pub struct Catalog {
+pub struct RootData {
+    pub catalog_count: u64,
+    //pub root_authority: Pubkey,
+}
+// Size: 8 + 8 = 16
+
+impl RootData {
+    pub fn next_catalog_id(&mut self) -> anchor_lang::Result<u64> {
+        let x: u64 = self.catalog_count;
+        self.catalog_count = self.catalog_count.checked_add(1).ok_or(error!(ErrorCode::Overflow))?;
+        return Ok(x);
+    }
+}
+
+#[account]
+#[derive(Default)]
+pub struct CatalogIdentifier {
+    pub catalog: u64,
+}
+// Space = 8 + 8 = 16
+
+#[account]
+#[derive(Default)]
+pub struct CatalogInstance {
     pub catalog: u64,
     pub catalog_owner: Pubkey,
     pub catalog_url: Pubkey,
-    pub net_auth: Pubkey,
     pub auth_type: u8,
+    pub net_auth: Pubkey,
 }
-// Space = 8 + 8 + 32 + 32 + 32 + 1 = 84
-*/
+// Space = 8 + 8 + 32 + 32 + 1 + 32 = 113
 
 #[account]
 #[derive(Default)]
@@ -154,4 +247,6 @@ pub enum ErrorCode {
     InvalidURLHash,
     #[msg("Invalid URL length")]
     InvalidURLLength,
+    #[msg("Overflow")]
+    Overflow,
 }
