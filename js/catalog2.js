@@ -123,7 +123,7 @@ async function createListing(listingData) {
     console.log('Create Listing: ')
     console.log(listingData)
     var listingUrl = await findOrCreateURLEntry(listingData['base'], 1)
-    var addressUrl = await findOrCreateURLEntry(encodeURIComponent(listingData['address']), 2)
+    var detailUrl = await findOrCreateURLEntry(encodeURIComponent(listingData['detail']), 2)
     var labelUrl = await findOrCreateURLEntry(encodeURIComponent(listingData['label']), 2)
     var latitude = listingData['latitude']
     var longitude = listingData['longitude']
@@ -166,7 +166,7 @@ async function createListing(listingData) {
         owner: provider.wallet.publicKey.toBuffer().toJSON().data,
         listing_url: listingUrl.toBuffer().toJSON().data,
         label_url: labelUrl.toBuffer().toJSON().data,
-        detail_url: addressUrl.toBuffer().toJSON().data,
+        detail_url: detailUrl.toBuffer().toJSON().data,
     })
     //console.log(lparams)
     const buffer = borsh.serialize(catalogParamSchema, lparams)
@@ -198,11 +198,11 @@ async function createListing(listingData) {
 async function main() {
     var base = 'http://173.234.24.74:9500/api/catalog/'
     var listings = [
-        {
+        /*{
             'base': base,
             'category': 'http://www.productontology.org/doc/Massage',
             'label': 'MoodUp Wellness',
-            'address': '39039 Paseo Padre Pkwy, Fremont, CA 94538',
+            'detail': JSON.stringify({'address': '39039 Paseo Padre Pkwy, Fremont, CA 94538'}),
             'latitude': '375536041',
             'longitude': '-1219825439',
             'attributes': [
@@ -216,12 +216,25 @@ async function main() {
                 'https://www.geonames.org/5350736/', // Fremont
             ],
             'owner': provider.wallet.publicKey,
-        },
+        },*/
         {
             'base': base,
             'category': 'http://www.productontology.org/doc/Massage',
             'label': 'Andalusia Day Spa',
-            'address': '40643 Grimmer Blvd, Fremont, CA 94538',
+            'detail': JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "address": {
+                    "@type": "PostalAddress",
+                    "streetAddress": "40643 Grimmer Blvd",
+                    "addressLocality": "Fremont",
+                    "addressRegion": "CA",
+                    "postalCode": "94538",
+                    "addressCountry": "USA",
+                },
+                "email": "some@body.com",
+                "telephone": "+14519943344",
+            }),
             'attributes': [
                 'CommerceEngine',
                 'InPerson',

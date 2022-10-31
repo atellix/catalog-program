@@ -145,7 +145,7 @@ async function main() {
             'url': await decodeURL(listingData, listingData.listingUrl),
             'uuid': uuidstr(listingData.uuid.toBuffer().toJSON().data),
             'label': await decodeURL(listingData, listingData.labelUrl),
-            'address': await decodeURL(listingData, listingData.detailUrl),
+            'detail': JSON.parse(await decodeURL(listingData, listingData.detailUrl)),
             'latitude': lat,
             'longitude': lon,
             'owner': listingData.owner.toString(),
