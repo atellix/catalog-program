@@ -1,5 +1,10 @@
 use crate::program::Catalog;
 use anchor_lang::prelude::*;
+use solana_program::instruction::Instruction;
+use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_checked};
+use solana_program::ed25519_program::{ID as ED25519_ID};
+use borsh::{ BorshSerialize, BorshDeserialize };
+use std::convert::TryInto;
 use md5;
 
 declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
@@ -10,6 +15,23 @@ pub enum URLExpandMode {
     None,           // 0 - Do not expand (full URL provided)
     AppendUUID,     // 1 - Convert the 'uuid' field to a lowercase UUID and then append the UUID to the URL
     UTF8UriEncoded, // 2 - URI-encoded UTF-8 string
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct CatalogParameters {
+    pub uuid: u128,
+    pub catalog: u64,
+    pub category: u128,
+    pub filter_by_1: u128,
+    pub filter_by_2: u128,
+    pub filter_by_3: u128,
+    pub attributes: u8,
+    pub latitude: [u8; 4],
+    pub longitude: [u8; 4],
+    pub owner: [u8; 32],
+    pub listing_url: [u8; 32],
+    pub label_url: [u8; 32],
+    pub detail_url: [u8; 32],
 }
 
 #[program]

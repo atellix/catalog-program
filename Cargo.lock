@@ -379,6 +379,7 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "borsh",
  "md5",
 ]
 
