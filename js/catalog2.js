@@ -1,10 +1,11 @@
 const { Buffer } = require('buffer')
 const { v4: uuidv4, parse: uuidparse } = require('uuid')
 const anchor = require('@project-serum/anchor')
-const { Keypair, PublicKey, Transaction, Ed25519Program, SystemProgram } = require('@solana/web3.js')
+const { Keypair, PublicKey, Transaction, Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram } = require('@solana/web3.js')
 const MD5 = require('md5.js')
 const BitSet = require('bitset')
 const borsh = require('borsh')
+const bufLayout = require('buffer-layout')
 //const { TOKEN_PROGRAM_ID } = require('@solana/spl-token')
 //const { promisify } = require('util')
 //const exec = promisify(require('child_process').exec)
@@ -146,6 +147,10 @@ async function createListing(listingData) {
     }
     var listingEntry = await programAddress([catalogBuf, listingBuf], catalogProgramPK)
     var listing = new PublicKey(listingEntry.pubkey)
+    var buf1 = Buffer.alloc(4)
+    var buf2 = Buffer.alloc(4)
+    bufLayout.s32().encode(latitude, buf1)
+    bufLayout.s32().encode(longitude, buf2)
     console.log('Listing UUID: ' + listingId)
     console.log('Create Listing: ' + listingEntry.pubkey)
     var lparams = new Object({
@@ -156,8 +161,8 @@ async function createListing(listingData) {
         filter_by_2: locality2,
         filter_by_3: locality3,
         attributes: writeAttributes(attributes),
-        latitude: (new anchor.BN(latitude)).toBuffer().toJSON().data,
-        longitude: (new anchor.BN(latitude)).toBuffer().toJSON().data,
+        latitude: buf1.toJSON().data,
+        longitude: buf2.toJSON().data,
         owner: provider.wallet.publicKey.toBuffer().toJSON().data,
         listing_url: listingUrl.toBuffer().toJSON().data,
         label_url: labelUrl.toBuffer().toJSON().data,
@@ -172,30 +177,22 @@ async function createListing(listingData) {
         message: buffer,
         privateKey: kp.secretKey,
     }))
-    console.log(await provider.sendAndConfirm(tx))
-    /*console.log(await catalogProgram.rpc.createListing(
+    tx.add(catalogProgram.instruction.createListing(
         new anchor.BN(catalogId),
         new anchor.BN(uuidparse(listingId)),
-        category,
-        locality1,
-        locality2,
-        locality3,
-        writeAttributes(attributes),
-        new anchor.BN(latitude),
-        new anchor.BN(longitude),
         {
             'accounts': {
                 owner: provider.wallet.publicKey,
                 listing: listing,
-                listingUrl: listingUrl,
-                detailUrl: addressUrl,
-                labelUrl: labelUrl,
-                admin: provider.wallet.publicKey,
+                authKey: kp.publicKey,
+                feePayer: provider.wallet.publicKey,
+                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
                 systemProgram: SystemProgram.programId,
             },
         },
     ))
-    return listing*/
+    console.log(await provider.sendAndConfirm(tx))
+    return listing
 }
 
 async function main() {

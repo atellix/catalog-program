@@ -381,6 +381,7 @@ dependencies = [
  "anchor-lang",
  "borsh",
  "md5",
+ "solana-program",
 ]
 
 [[package]]

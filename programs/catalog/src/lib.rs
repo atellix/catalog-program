@@ -4,7 +4,6 @@ use solana_program::instruction::Instruction;
 use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_checked};
 use solana_program::ed25519_program::{ID as ED25519_ID};
 use borsh::{ BorshSerialize, BorshDeserialize };
-use std::convert::TryInto;
 use md5;
 
 declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
@@ -33,6 +32,8 @@ pub struct CatalogParameters {
     pub label_url: [u8; 32],
     pub detail_url: [u8; 32],
 }
+
+// LEN: 16 + 8 + 16 + 16 + 16 + 16 + 1 + 4 + 4 + 32 + 32 + 32 + 32 = 225
 
 #[program]
 pub mod catalog {
@@ -86,29 +87,27 @@ pub mod catalog {
         ctx: Context<CreateListing>,
         inp_catalog: u64,
         inp_uuid: u128,
-        inp_category: u128,
-        inp_filter_by_1: u128, // country
-        inp_filter_by_2: u128, // region
-        inp_filter_by_3: u128, // local area
-        inp_attributes: u8,   // attribute flags
-        inp_latitude: i32,
-        inp_longitude: i32,
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
+        let ix: Instruction = load_instruction_at_checked(0, &ctx.accounts.ix_sysvar)?;
+        let req = utils::verify_ed25519_ix(&ix, &mut ctx.accounts.auth_key.key().to_bytes(), 225)?;
+        let params = CatalogParameters::try_from_slice(&req).unwrap();
+        require!(inp_uuid == params.uuid, ErrorCode::InvalidParameters);
+        require!(inp_catalog == params.catalog, ErrorCode::InvalidParameters);
         let listing_entry = &mut ctx.accounts.listing;
-        listing_entry.uuid = inp_uuid;
-        listing_entry.catalog = inp_catalog;
-        listing_entry.category = inp_category;
-        listing_entry.filter_by[0] = inp_filter_by_1;
-        listing_entry.filter_by[1] = inp_filter_by_2;
-        listing_entry.filter_by[2] = inp_filter_by_3;
-        listing_entry.attributes = inp_attributes;
-        listing_entry.latitude = inp_latitude;
-        listing_entry.longitude = inp_longitude;
-        listing_entry.owner = ctx.accounts.owner.key();
-        listing_entry.label_url = ctx.accounts.label_url.key();
-        listing_entry.listing_url = ctx.accounts.listing_url.key();
-        listing_entry.detail_url = ctx.accounts.detail_url.key();
+        listing_entry.uuid = params.uuid;
+        listing_entry.catalog = params.catalog;
+        listing_entry.category = params.category;
+        listing_entry.filter_by[0] = params.filter_by_1;
+        listing_entry.filter_by[1] = params.filter_by_2;
+        listing_entry.filter_by[2] = params.filter_by_3;
+        listing_entry.attributes = params.attributes;
+        listing_entry.latitude = i32::from_le_bytes(params.latitude);
+        listing_entry.longitude = i32::from_le_bytes(params.longitude);
+        listing_entry.owner = Pubkey::new_from_array(params.owner);
+        listing_entry.label_url = Pubkey::new_from_array(params.label_url);
+        listing_entry.listing_url = Pubkey::new_from_array(params.listing_url);
+        listing_entry.detail_url = Pubkey::new_from_array(params.detail_url);
         listing_entry.update_count = 1;
         listing_entry.update_ts = clock.unix_timestamp;
         Ok(())
@@ -118,6 +117,82 @@ pub mod catalog {
         _ctx: Context<RemoveListing>,
     ) -> anchor_lang::Result<()> {
         Ok(())
+    }
+}
+
+pub mod utils {
+    use super::*;
+
+    /// Verify Ed25519Program instruction fields
+    pub fn verify_ed25519_ix(ix: &Instruction, pubkey: &[u8], msg_len: u16) -> anchor_lang::Result<Vec<u8>> {
+        if  ix.program_id       != ED25519_ID                   ||  // The program id we expect
+            ix.accounts.len()   != 0                                // With no context accounts
+        {
+            return Err(ErrorCode::SigVerificationFailed.into());    // Otherwise, we can already throw err
+        }
+
+        let r: Vec<u8> = check_ed25519_data(&ix.data, pubkey, msg_len)?;            // If that's not the case, check data
+
+        Ok(r)
+    }
+
+    /// Verify serialized Ed25519Program instruction data
+    pub fn check_ed25519_data(data: &[u8], pubkey: &[u8], msg_len: u16) -> anchor_lang::Result<Vec<u8>> {
+        // According to this layout used by the Ed25519Program
+        // https://github.com/solana-labs/solana-web3.js/blob/master/src/ed25519-program.ts#L33
+
+        // "Deserializing" byte slices
+
+        let num_signatures                  = &[data[0]];        // Byte  0
+        let padding                         = &[data[1]];        // Byte  1
+        let signature_offset                = &data[2..=3];      // Bytes 2,3
+        let signature_instruction_index     = &data[4..=5];      // Bytes 4,5
+        let public_key_offset               = &data[6..=7];      // Bytes 6,7
+        let public_key_instruction_index    = &data[8..=9];      // Bytes 8,9
+        let message_data_offset             = &data[10..=11];    // Bytes 10,11
+        let message_data_size               = &data[12..=13];    // Bytes 12,13
+        let message_instruction_index       = &data[14..=15];    // Bytes 14,15
+
+        let data_pubkey                     = &data[16..16+32];  // Bytes 16..16+32
+        let _data_sig                       = &data[48..48+64];  // Bytes 48..48+64
+        let data_msg                        = &data[112..];      // Bytes 112..end
+
+        // Expected values
+
+        let exp_public_key_offset:      u16 = 16; // 2*u8 + 7*u16
+        let exp_signature_offset:       u16 = exp_public_key_offset + 32;
+        let exp_message_data_offset:    u16 = exp_signature_offset + 64;
+        let exp_num_signatures:          u8 = 1;
+        let exp_message_data_size:      u16 = msg_len;
+
+        // Header and Arg Checks
+
+        // Header
+        if  num_signatures                  != &exp_num_signatures.to_le_bytes()        ||
+            padding                         != &[0]                                     ||
+            signature_offset                != &exp_signature_offset.to_le_bytes()      ||
+            signature_instruction_index     != &u16::MAX.to_le_bytes()                  ||
+            public_key_offset               != &exp_public_key_offset.to_le_bytes()     ||
+            public_key_instruction_index    != &u16::MAX.to_le_bytes()                  ||
+            message_data_offset             != &exp_message_data_offset.to_le_bytes()   ||
+            message_data_size               != &exp_message_data_size.to_le_bytes()     ||
+            message_instruction_index       != &u16::MAX.to_le_bytes()  
+        {
+            return Err(ErrorCode::SigVerificationFailed.into());
+        }
+
+        // Arguments
+        if  data_pubkey != pubkey {
+            return Err(ErrorCode::SigVerificationFailed.into());
+        }
+
+        Ok(data_msg.to_vec())
+    }
+
+    #[error_code]
+    pub enum ErrorCode {
+        #[msg("Signature verification failed")]
+        SigVerificationFailed,
     }
 }
 
@@ -167,18 +242,15 @@ pub struct ActivateCatalog<'info> {
 #[derive(Accounts)]
 #[instruction(inp_catalog: u64, inp_uuid: u128)]
 pub struct CreateListing<'info> {
-    #[account(init, seeds = [inp_catalog.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = admin, space = 249)]
+    #[account(init, seeds = [inp_catalog.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 249)]
     pub listing: Account<'info, CatalogEntry>,
     /// CHECK: ok
-    pub owner: UncheckedAccount<'info>,
-    /// CHECK: ok
-    pub listing_url: UncheckedAccount<'info>,
-    /// CHECK: ok
-    pub label_url: UncheckedAccount<'info>,
-    /// CHECK: ok
-    pub detail_url: UncheckedAccount<'info>,
+    pub auth_key: UncheckedAccount<'info>,
+    pub owner: Signer<'info>,
+    #[account(address = IX_ID)]
+    pub ix_sysvar: AccountInfo<'info>,
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub fee_payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -269,6 +341,8 @@ pub enum ErrorCode {
     InvalidURLHash,
     #[msg("Invalid URL length")]
     InvalidURLLength,
+    #[msg("Invalid parameters")]
+    InvalidParameters,
     #[msg("Overflow")]
     Overflow,
 }
