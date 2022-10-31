@@ -4,6 +4,7 @@ use solana_program::instruction::Instruction;
 use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_checked};
 use solana_program::ed25519_program::{ID as ED25519_ID};
 use borsh::{ BorshSerialize, BorshDeserialize };
+use std::convert::TryInto;
 use md5;
 
 declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
@@ -90,10 +91,13 @@ pub mod catalog {
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
         let ix: Instruction = load_instruction_at_checked(0, &ctx.accounts.ix_sysvar)?;
-        let req = utils::verify_ed25519_ix(&ix, &mut ctx.accounts.auth_key.key().to_bytes(), 225)?;
+        let (pk, req) = utils::verify_ed25519_ix(&ix, 225)?;
         let params = CatalogParameters::try_from_slice(&req).unwrap();
+        require!(Pubkey::new_from_array(pk.try_into().unwrap()) == ctx.accounts.auth_key.key(), ErrorCode::InvalidParameters);
+        let owner = Pubkey::new_from_array(params.owner);
         require!(inp_uuid == params.uuid, ErrorCode::InvalidParameters);
         require!(inp_catalog == params.catalog, ErrorCode::InvalidParameters);
+        require!(ctx.accounts.owner.key() == owner, ErrorCode::InvalidParameters);
         let listing_entry = &mut ctx.accounts.listing;
         listing_entry.uuid = params.uuid;
         listing_entry.catalog = params.catalog;
@@ -104,7 +108,7 @@ pub mod catalog {
         listing_entry.attributes = params.attributes;
         listing_entry.latitude = i32::from_le_bytes(params.latitude);
         listing_entry.longitude = i32::from_le_bytes(params.longitude);
-        listing_entry.owner = Pubkey::new_from_array(params.owner);
+        listing_entry.owner = owner;
         listing_entry.label_url = Pubkey::new_from_array(params.label_url);
         listing_entry.listing_url = Pubkey::new_from_array(params.listing_url);
         listing_entry.detail_url = Pubkey::new_from_array(params.detail_url);
@@ -124,20 +128,20 @@ pub mod utils {
     use super::*;
 
     /// Verify Ed25519Program instruction fields
-    pub fn verify_ed25519_ix(ix: &Instruction, pubkey: &[u8], msg_len: u16) -> anchor_lang::Result<Vec<u8>> {
+    pub fn verify_ed25519_ix(ix: &Instruction, msg_len: u16) -> anchor_lang::Result<(Vec<u8>, Vec<u8>)> {
         if  ix.program_id       != ED25519_ID                   ||  // The program id we expect
             ix.accounts.len()   != 0                                // With no context accounts
         {
             return Err(ErrorCode::SigVerificationFailed.into());    // Otherwise, we can already throw err
         }
 
-        let r: Vec<u8> = check_ed25519_data(&ix.data, pubkey, msg_len)?;            // If that's not the case, check data
+        let r = check_ed25519_data(&ix.data, msg_len)?;            // If that's not the case, check data
 
         Ok(r)
     }
 
     /// Verify serialized Ed25519Program instruction data
-    pub fn check_ed25519_data(data: &[u8], pubkey: &[u8], msg_len: u16) -> anchor_lang::Result<Vec<u8>> {
+    pub fn check_ed25519_data(data: &[u8], msg_len: u16) -> anchor_lang::Result<(Vec<u8>, Vec<u8>)> {
         // According to this layout used by the Ed25519Program
         // https://github.com/solana-labs/solana-web3.js/blob/master/src/ed25519-program.ts#L33
 
@@ -181,12 +185,7 @@ pub mod utils {
             return Err(ErrorCode::SigVerificationFailed.into());
         }
 
-        // Arguments
-        if  data_pubkey != pubkey {
-            return Err(ErrorCode::SigVerificationFailed.into());
-        }
-
-        Ok(data_msg.to_vec())
+        Ok((data_pubkey.to_vec(), data_msg.to_vec()))
     }
 
     #[error_code]
