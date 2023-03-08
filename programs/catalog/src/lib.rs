@@ -32,6 +32,8 @@ pub struct CatalogParameters {
     pub listing_url: [u8; 32],
     pub label_url: [u8; 32],
     pub detail_url: [u8; 32],
+    pub fee_account: [u8; 32],
+    pub fee_total: u64,
 }
 
 // LEN: 16 + 8 + 16 + 16 + 16 + 16 + 1 + 4 + 4 + 32 + 32 + 32 + 32 = 225
@@ -256,6 +258,12 @@ pub struct CreateListing<'info> {
     pub ix_sysvar: AccountInfo<'info>,
     #[account(mut)]
     pub fee_payer: Signer<'info>,
+    /// CHECK: ok
+    #[account(mut)]
+    pub fee_source: AccountInfo<'info>,
+    /// CHECK: ok
+    #[account(mut)]
+    pub fee_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 
