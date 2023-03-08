@@ -5,7 +5,7 @@ use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_chec
 use solana_program::ed25519_program::{ID as ED25519_ID};
 use borsh::{ BorshSerialize, BorshDeserialize };
 use std::convert::TryInto;
-use md5;
+use sha3::{Shake128, digest::{Update, ExtendableOutput, XofReader}};
 
 declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
 
@@ -74,7 +74,12 @@ pub mod catalog {
         inp_url_length: u32,
         inp_url: String,
     ) -> anchor_lang::Result<()> {
-        let confirm_hash: u128 = u128::from_be_bytes(md5::compute(&inp_url).into());
+        let mut hasher = Shake128::default();
+        hasher.update(inp_url.as_bytes());
+        let mut reader = hasher.finalize_xof();
+        let mut hash_result = [0u8; 16];
+        reader.read(&mut hash_result);
+        let confirm_hash: u128 = u128::from_be_bytes(hash_result);
         require!(confirm_hash == inp_url_hash, ErrorCode::InvalidURLHash); // Verifies hash used in the URL account
         require!(inp_url.len() == inp_url_length as usize, ErrorCode::InvalidURLLength);
         // TODO: validate expand mode
@@ -246,6 +251,7 @@ pub struct CreateListing<'info> {
     /// CHECK: ok
     pub auth_key: UncheckedAccount<'info>,
     pub owner: Signer<'info>,
+    /// CHECK: ok
     #[account(address = IX_ID)]
     pub ix_sysvar: AccountInfo<'info>,
     #[account(mut)]

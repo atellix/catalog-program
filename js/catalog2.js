@@ -2,7 +2,7 @@ const { Buffer } = require('buffer')
 const { v4: uuidv4, parse: uuidparse } = require('uuid')
 const anchor = require('@project-serum/anchor')
 const { Keypair, PublicKey, Transaction, Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram } = require('@solana/web3.js')
-const MD5 = require('md5.js')
+const jsSHA = require('jssha')
 const BitSet = require('bitset')
 const borsh = require('borsh')
 const bufLayout = require('buffer-layout')
@@ -37,15 +37,17 @@ const catalogParamSchema = new Map([[Object, {
 }]])
 
 function getHashBN(val) {
-    var bufHash = new MD5().update(val).digest()
-    var hashData = bufHash.toJSON().data
+    var shaObj = new jsSHA("SHAKE128", "TEXT", { encoding: "UTF8" })
+    var hashData = shaObj.update(val).getHash("UINT8ARRAY", { outputLen: 128})
     return new anchor.BN(hashData)
 }
 
 async function getURLEntry(url, expandMode = 0) {
     var bufExpand = Buffer.alloc(1)
     bufExpand.writeUInt8(expandMode)
-    var bufHash = new MD5().update(url).digest()
+    var shaObj = new jsSHA("SHAKE128", "TEXT", { encoding: "UTF8" })
+    var hashData = shaObj.update(url).getHash("UINT8ARRAY", { outputLen: 128})
+    var bufHash = Buffer.from(hashData)
     var urlEntry = await programAddress([bufExpand, bufHash], catalogProgramPK)
     return new PublicKey(urlEntry.pubkey)
 }
