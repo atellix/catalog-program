@@ -1,5 +1,6 @@
 use crate::program::Catalog;
 use anchor_lang::prelude::*;
+use anchor_spl::token::{ self, Transfer };
 use solana_program::instruction::Instruction;
 use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_checked};
 use solana_program::ed25519_program::{ID as ED25519_ID};
@@ -33,10 +34,10 @@ pub struct CatalogParameters {
     pub label_url: [u8; 32],
     pub detail_url: [u8; 32],
     pub fee_account: [u8; 32],
-    pub fee_total: u64,
+    pub fee_tokens: u64,
 }
 
-// LEN: 16 + 8 + 16 + 16 + 16 + 16 + 1 + 4 + 4 + 32 + 32 + 32 + 32 = 225
+// LEN: 16 + 8 + 16 + 16 + 16 + 16 + 1 + 4 + 4 + 32 + 32 + 32 + 32 + 32 + 8 = 265
 
 #[program]
 pub mod catalog {
@@ -98,13 +99,24 @@ pub mod catalog {
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
         let ix: Instruction = load_instruction_at_checked(0, &ctx.accounts.ix_sysvar)?;
-        let (pk, req) = utils::verify_ed25519_ix(&ix, 225)?;
+        let (pk, req) = utils::verify_ed25519_ix(&ix, 265)?;
         let params = CatalogParameters::try_from_slice(&req).unwrap();
         require!(Pubkey::new_from_array(pk.try_into().unwrap()) == ctx.accounts.auth_key.key(), ErrorCode::InvalidParameters);
         let owner = Pubkey::new_from_array(params.owner);
         require!(inp_uuid == params.uuid, ErrorCode::InvalidParameters);
         require!(inp_catalog == params.catalog, ErrorCode::InvalidParameters);
         require!(ctx.accounts.owner.key() == owner, ErrorCode::InvalidParameters);
+        require!(ctx.accounts.fee_account.key().to_bytes() == params.fee_account, ErrorCode::InvalidParameters);
+        if params.fee_tokens > 0 {
+            let cpi_accounts = Transfer {
+                from: ctx.accounts.fee_source.to_account_info(),
+                to: ctx.accounts.fee_account.to_account_info(),
+                authority: ctx.accounts.fee_payer.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            token::transfer(cpi_ctx, params.fee_tokens)?;
+        }
         let listing_entry = &mut ctx.accounts.listing;
         listing_entry.uuid = params.uuid;
         listing_entry.catalog = params.catalog;
@@ -189,6 +201,7 @@ pub mod utils {
             message_data_size               != &exp_message_data_size.to_le_bytes()     ||
             message_instruction_index       != &u16::MAX.to_le_bytes()  
         {
+            msg!("Error 2");
             return Err(ErrorCode::SigVerificationFailed.into());
         }
 
@@ -265,6 +278,9 @@ pub struct CreateListing<'info> {
     #[account(mut)]
     pub fee_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
+    /// CHECK: ok
+    #[account(address = token::ID)]
+    pub token_program: UncheckedAccount<'info>,
 }
 
 // TODO: RBAC
