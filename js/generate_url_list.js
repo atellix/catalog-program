@@ -1,12 +1,12 @@
 const anchor = require('@project-serum/anchor')
-const MD5 = require('md5.js')
+const jsSHA = require('jssha')
 const bs58 = require('bs58')
 
 const { jsonFileWrite } = require('../../js/atellix-common')
 
 function getHashBN(val) {
-    var bufHash = new MD5().update(val).digest()
-    var hashData = bufHash.toJSON().data
+    var shaObj = new jsSHA("SHAKE128", "TEXT", { encoding: "UTF8" })
+    var hashData = shaObj.update(val).getHash("UINT8ARRAY", { outputLen: 128})
     return new anchor.BN(hashData)
 }
 

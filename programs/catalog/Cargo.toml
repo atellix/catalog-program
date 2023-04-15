@@ -16,8 +16,12 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = "0.25.0"
+anchor-lang = { version = "0.25.0", features = ["init-if-needed"] }
 anchor-spl = "0.25.0"
 borsh = { version = "0.9.3", features = [] }
 sha3 = "0.10.6"
+bytemuck = "1.7.2"
+num_enum = "0.5.4"
+byte-slice-cast = "1.0.0"
 solana-program = "1.10.29"
+slab-alloc = { git = "https://github.com/atellix/slab-alloc", branch = "net-authority" }

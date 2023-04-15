@@ -5,10 +5,162 @@ use solana_program::instruction::Instruction;
 use solana_program::sysvar::instructions::{ID as IX_ID, load_instruction_at_checked};
 use solana_program::ed25519_program::{ID as ED25519_ID};
 use borsh::{ BorshSerialize, BorshDeserialize };
+use num_enum::{ TryFromPrimitive };
+use bytemuck::{ Pod, Zeroable };
+use byte_slice_cast::{ AsByteSlice };
 use std::convert::TryInto;
+use std::result::Result as FnResult;
 use sha3::{Shake128, digest::{Update, ExtendableOutput, XofReader}};
 
-declare_id!("EXWag8kRv8Tgk7k5N6cxmAUiSqEGdRBMVA6wBv18uXKe");
+extern crate slab_alloc;
+use slab_alloc::{ SlabPageAlloc, CritMapHeader, CritMap, AnyNode, LeafNode, SlabVec, SlabTreeError };
+
+declare_id!("6vbofg2ka2zH39MMmotzwiZYJu8BMeeZFx2ermHKmyVf");
+
+pub const VERSION_MAJOR: u32 = 1;
+pub const VERSION_MINOR: u32 = 0;
+pub const VERSION_PATCH: u32 = 0;
+
+pub const MAX_RBAC: u32 = 128;
+
+#[repr(u16)]
+#[derive(PartialEq, Debug, Eq, Copy, Clone)]
+pub enum DT { // Data types
+    UserRBACMap,                 // CritMap
+    UserRBAC,                    // Slabvec
+}
+
+#[repr(u32)]
+#[derive(PartialEq, Debug, Eq, Copy, Clone, TryFromPrimitive)]
+pub enum Role {             // Role-based access control:
+    NetworkAdmin,           // 0 - Can manage RBAC for other users
+    CreateCatalog,          // 1 - This signer can create catalogs
+    RemoveURL,              // 2 - This signer close URL data
+}
+
+#[derive(Copy, Clone)]
+#[repr(packed)]
+pub struct UserRBAC {
+    pub role: Role,
+    pub free: u32,
+}
+unsafe impl Zeroable for UserRBAC {}
+unsafe impl Pod for UserRBAC {}
+
+impl UserRBAC {
+    pub fn role(&self) -> Role {
+        self.role
+    }
+
+    pub fn free(&self) -> u32 {
+        self.free
+    }
+
+    pub fn set_free(&mut self, new_free: u32) {
+        self.free = new_free
+    }
+
+    fn next_index(pt: &mut SlabPageAlloc, data_type: DT) -> FnResult<u32, ProgramError> {
+        let svec = pt.header_mut::<SlabVec>(index_datatype(data_type));
+        let free_top = svec.free_top();
+        if free_top == 0 { // Empty free list
+            return Ok(svec.next_index());
+        }
+        let free_index = free_top.checked_sub(1).ok_or(error!(ErrorCode::Overflow))?;
+        let index_act = pt.index::<UserRBAC>(index_datatype(data_type), free_index as usize);
+        let index_ptr = index_act.free();
+        pt.header_mut::<SlabVec>(index_datatype(data_type)).set_free_top(index_ptr);
+        Ok(free_index)
+    }
+
+    fn free_index(pt: &mut SlabPageAlloc, data_type: DT, idx: u32) -> anchor_lang::Result<()> {
+        let free_top = pt.header::<SlabVec>(index_datatype(data_type)).free_top();
+        pt.index_mut::<UserRBAC>(index_datatype(data_type), idx as usize).set_free(free_top);
+        let new_top = idx.checked_add(1).ok_or(error!(ErrorCode::Overflow))?;
+        pt.header_mut::<SlabVec>(index_datatype(data_type)).set_free_top(new_top);
+        Ok(())
+    }
+}
+
+fn full_account_zero(account: &AccountInfo) -> bool {
+    let data = account.try_borrow_data().unwrap();
+    let (prefix, aligned, suffix) = unsafe { data.align_to::<u128>() };
+    prefix.iter().all(|&x| x == 0) && suffix.iter().all(|&x| x == 0) && aligned.iter().all(|&x| x == 0)
+}
+
+#[inline]
+fn index_datatype(data_type: DT) -> u16 {  // Maps only
+    match data_type {
+        DT::UserRBAC => DT::UserRBAC as u16,
+        _ => { panic!("Invalid datatype") },
+    }
+}
+
+#[inline]
+fn map_len(data_type: DT) -> u32 {
+    match data_type {
+        DT::UserRBAC => MAX_RBAC,
+        _ => 0,
+    }
+}
+
+#[inline]
+fn map_datatype(data_type: DT) -> u16 {  // Maps only
+    match data_type {
+        DT::UserRBAC => DT::UserRBACMap as u16,
+        _ => { panic!("Invalid datatype") },
+    }
+}
+
+#[inline]
+fn map_get(pt: &mut SlabPageAlloc, data_type: DT, key: u128) -> Option<LeafNode> {
+    let cm = CritMap { slab: pt, type_id: map_datatype(data_type), capacity: map_len(data_type) };
+    let res = cm.get_key(key);
+    match res {
+        None => None,
+        Some(res) => Some(res.clone()),
+    }
+}
+
+#[inline]
+fn map_insert(pt: &mut SlabPageAlloc, data_type: DT, node: &LeafNode) -> FnResult<(), SlabTreeError> {
+    let mut cm = CritMap { slab: pt, type_id: map_datatype(data_type), capacity: map_len(data_type) };
+    let res = cm.insert_leaf(node);
+    match res {
+        Err(SlabTreeError::OutOfSpace) => {
+            //msg!("Atellix: Out of space...");
+            return Err(SlabTreeError::OutOfSpace)
+        },
+        _  => Ok(())
+    }
+}
+
+#[inline]
+fn map_remove(pt: &mut SlabPageAlloc, data_type: DT, key: u128) -> FnResult<(), SlabTreeError> {
+    let mut cm = CritMap { slab: pt, type_id: map_datatype(data_type), capacity: map_len(data_type) };
+    cm.remove_by_key(key).ok_or(SlabTreeError::NotFound)?;
+    Ok(())
+}
+
+fn has_role(acc_auth: &AccountInfo, role: Role, key: &Pubkey) -> anchor_lang::Result<()> {
+    let auth_data: &mut [u8] = &mut acc_auth.try_borrow_mut_data()?;
+    let rd = SlabPageAlloc::new(auth_data);
+    let authhash: u128 = CritMap::bytes_hash([[role as u32].as_byte_slice(), key.as_ref()].concat().as_slice());
+    let authrec = map_get(rd, DT::UserRBAC, authhash);
+    if ! authrec.is_some() {
+        return Err(ErrorCode::AccessDenied.into());
+    }
+    if authrec.unwrap().owner() != *key {
+        msg!("User key does not match signer");
+        return Err(ErrorCode::AccessDenied.into());
+    }
+    let urec = rd.index::<UserRBAC>(DT::UserRBAC as u16, authrec.unwrap().slot() as usize);
+    if urec.role() != role {
+        msg!("Role does not match");
+        return Err(ErrorCode::AccessDenied.into());
+    }
+    Ok(())
+}
 
 #[repr(u8)]
 #[derive(PartialEq, Debug, Eq, Copy, Clone)] // TryFromPrimitive
@@ -44,29 +196,169 @@ pub mod catalog {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>) -> anchor_lang::Result<()> {
-        let root = &mut ctx.accounts.root_data;
-        root.catalog_count = 0;
+        let rt = &mut ctx.accounts.root_data;
+        rt.catalog_count = 0;
+        rt.root_authority = ctx.accounts.auth_data.key();
+
+        let auth_data: &mut[u8] = &mut ctx.accounts.auth_data.try_borrow_mut_data()?;
+        let rd = SlabPageAlloc::new(auth_data);
+        rd.setup_page_table();
+        rd.allocate::<CritMapHeader, AnyNode>(DT::UserRBACMap as u16, MAX_RBAC as usize).expect("Failed to allocate");
+        rd.allocate::<SlabVec, UserRBAC>(DT::UserRBAC as u16, MAX_RBAC as usize).expect("Failed to allocate");
+
+        Ok(())
+    }
+
+    pub fn store_metadata(ctx: Context<UpdateMetadata>,
+        inp_program_name: String,
+        inp_developer_name: String,
+        inp_developer_url: String,
+        inp_source_url: String,
+        inp_verify_url: String,
+    ) -> anchor_lang::Result<()> {
+        let md = &mut ctx.accounts.program_info;
+        md.semvar_major = VERSION_MAJOR;
+        md.semvar_minor = VERSION_MINOR;
+        md.semvar_patch = VERSION_PATCH;
+        md.program = ctx.accounts.program.key();
+        md.program_name = inp_program_name;
+        md.developer_name = inp_developer_name;
+        md.developer_url = inp_developer_url;
+        md.source_url = inp_source_url;
+        md.verify_url = inp_verify_url;
+        msg!("Program: {}", ctx.accounts.program.key.to_string());
+        msg!("Program Name: {}", md.program_name.as_str());
+        msg!("Version: {}.{}.{}", VERSION_MAJOR.to_string(), VERSION_MINOR.to_string(), VERSION_PATCH.to_string());
+        msg!("Developer Name: {}", md.developer_name.as_str());
+        msg!("Developer URL: {}", md.developer_url.as_str());
+        msg!("Source URL: {}", md.source_url.as_str());
+        msg!("Verify URL: {}", md.verify_url.as_str());
+        Ok(())
+    }
+
+    pub fn grant(ctx: Context<UpdateRBAC>,
+        _inp_root_nonce: u8,
+        inp_role: u32,
+    ) -> anchor_lang::Result<()> {
+        let acc_rbac = &ctx.accounts.rbac_user.to_account_info();
+        let acc_admn = &ctx.accounts.program_admin.to_account_info();
+        let acc_auth = &ctx.accounts.auth_data.to_account_info();
+
+        // Check for NetworkAdmin authority
+        let admin_role = has_role(&acc_auth, Role::NetworkAdmin, acc_admn.key);
+        let mut program_owner: bool = false;
+        if admin_role.is_err() {
+            let acc_pdat = &ctx.accounts.program_data;
+            require!(acc_pdat.upgrade_authority_address.unwrap() == *acc_admn.key, ErrorCode::AccessDenied);
+            program_owner = true;
+        }
+
+        // Verify specified role
+        let role_item = Role::try_from_primitive(inp_role);
+        if role_item.is_err() {
+            msg!("Invalid role: {}", inp_role.to_string());
+            return Err(ErrorCode::InvalidParameters.into());
+        }
+        let role = role_item.unwrap();
+        if role == Role::NetworkAdmin && ! program_owner {
+            msg!("Reserved for program owner");
+            return Err(ErrorCode::AccessDenied.into());
+        }
+
+        // Verify not assigning roles to self
+        if *acc_admn.key == *acc_rbac.key {
+            msg!("Cannot grant roles to self");
+            return Err(ErrorCode::AccessDenied.into());
+        }
+
+        let auth_data: &mut[u8] = &mut acc_auth.try_borrow_mut_data()?;
+        let rd = SlabPageAlloc::new(auth_data);
+        let authhash: u128 = CritMap::bytes_hash([[role as u32].as_byte_slice(), acc_rbac.key.as_ref()].concat().as_slice());
+
+        // Check if record exists
+        let authrec = map_get(rd, DT::UserRBAC, authhash);
+        if authrec.is_some() {
+            msg!("Atellix: Role already active");
+        } else {
+            // Add new record
+            let new_item = map_insert(rd, DT::UserRBAC, &LeafNode::new(authhash, 0, acc_rbac.key));
+            if new_item.is_err() {
+                msg!("Unable to insert role");
+                return Err(ErrorCode::InternalError.into());
+            }
+            let rbac_idx = UserRBAC::next_index(rd, DT::UserRBAC)?;
+            let mut cm = CritMap { slab: rd, type_id: map_datatype(DT::UserRBAC), capacity: map_len(DT::UserRBAC) };
+            cm.get_key_mut(authhash).unwrap().set_slot(rbac_idx);
+            *rd.index_mut(DT::UserRBAC as u16, rbac_idx as usize) = UserRBAC { role: role, free: 0 };
+            msg!("Atellix: Role granted");
+        }
+        Ok(())
+    }
+
+    pub fn revoke(ctx: Context<UpdateRBAC>,
+        _inp_root_nonce: u8,
+        inp_role: u32,
+    ) -> anchor_lang::Result<()> {
+        let acc_admn = &ctx.accounts.program_admin.to_account_info(); // Program owner or network admin
+        let acc_auth = &ctx.accounts.auth_data.to_account_info();
+        let acc_rbac = &ctx.accounts.rbac_user.to_account_info();
+
+        // Check for NetworkAdmin authority
+        let admin_role = has_role(&acc_auth, Role::NetworkAdmin, acc_admn.key);
+        let mut program_owner: bool = false;
+        if admin_role.is_err() {
+            let acc_pdat = &ctx.accounts.program_data;
+            require!(acc_pdat.upgrade_authority_address.unwrap() == *acc_admn.key, ErrorCode::AccessDenied);
+            program_owner = true;
+        }
+
+        // Verify specified role
+        let role_item = Role::try_from_primitive(inp_role);
+        if role_item.is_err() {
+            msg!("Invalid role: {}", inp_role.to_string());
+            return Err(ErrorCode::InvalidParameters.into());
+        }
+        let role = role_item.unwrap();
+        if role == Role::NetworkAdmin && ! program_owner {
+            msg!("Reserved for program owner");
+            return Err(ErrorCode::AccessDenied.into());
+        }
+
+        let auth_data: &mut[u8] = &mut acc_auth.try_borrow_mut_data()?;
+        let rd = SlabPageAlloc::new(auth_data);
+        let authhash: u128 = CritMap::bytes_hash([[role as u32].as_byte_slice(), acc_rbac.key.as_ref()].concat().as_slice());
+
+        // Check if record exists
+        let authrec = map_get(rd, DT::UserRBAC, authhash);
+        if authrec.is_some() {
+            map_remove(rd, DT::UserRBAC, authhash).or(Err(error!(ErrorCode::InternalError)))?;
+            UserRBAC::free_index(rd, DT::UserRBAC, authrec.unwrap().slot())?;
+            msg!("Atellix: Role revoked");
+        } else {
+            msg!("Atellix: Role not found");
+        }
         Ok(())
     }
 
     pub fn create_catalog(
         ctx: Context<CreateCatalog>,
-    ) -> anchor_lang::Result<()> {
-        let root = &mut ctx.accounts.root_data;
-        let cid = &mut ctx.accounts.catalog_id;
-        cid.catalog = root.next_catalog_id()?;
-        msg!("Allocated Catalog ID: {}", cid.catalog);
-        Ok(())
-    }
-
-    pub fn activate_catalog(
-        ctx: Context<ActivateCatalog>,
         inp_catalog: u64,
     ) -> anchor_lang::Result<()> {
-        let cinst = &mut ctx.accounts.catalog_inst;
-        cinst.catalog = inp_catalog;
-        cinst.catalog_owner = ctx.accounts.owner.key();
-        msg!("Activated Catalog ID: {}", cinst.catalog);
+        let acc_auth = &ctx.accounts.auth_data.to_account_info();
+        let acc_user = &ctx.accounts.auth_user.to_account_info();
+        let admin_role = has_role(&acc_auth, Role::CreateCatalog, acc_user.key);
+        if admin_role.is_err() {
+            msg!("No create catalog role");
+            return Err(ErrorCode::AccessDenied.into());
+        }
+
+        let root_data = &mut ctx.accounts.root_data;
+        root_data.add_catalog()?;
+        let cinst = &mut ctx.accounts.catalog;
+        cinst.catalog_id = inp_catalog;
+        cinst.signer = ctx.accounts.catalog_signer.key();
+        cinst.manager = ctx.accounts.catalog_manager.key();
+        msg!("Atellix: Created Catalog ID: {}", cinst.catalog_id);
         Ok(())
     }
 
@@ -94,17 +386,17 @@ pub mod catalog {
 
     pub fn create_listing(
         ctx: Context<CreateListing>,
-        inp_catalog: u64,
         inp_uuid: u128,
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
+        let catalog = &ctx.accounts.catalog;
         let ix: Instruction = load_instruction_at_checked(0, &ctx.accounts.ix_sysvar)?;
         let (pk, req) = utils::verify_ed25519_ix(&ix, 265)?;
         let params = CatalogParameters::try_from_slice(&req).unwrap();
-        require!(Pubkey::new_from_array(pk.try_into().unwrap()) == ctx.accounts.auth_key.key(), ErrorCode::InvalidParameters);
+        require!(Pubkey::new_from_array(pk.try_into().unwrap()) == catalog.signer, ErrorCode::InvalidParameters);
         let owner = Pubkey::new_from_array(params.owner);
+        require!(catalog.catalog_id == params.catalog, ErrorCode::InvalidParameters);
         require!(inp_uuid == params.uuid, ErrorCode::InvalidParameters);
-        require!(inp_catalog == params.catalog, ErrorCode::InvalidParameters);
         require!(ctx.accounts.owner.key() == owner, ErrorCode::InvalidParameters);
         require!(ctx.accounts.fee_account.key().to_bytes() == params.fee_account, ErrorCode::InvalidParameters);
         if params.fee_tokens > 0 {
@@ -131,11 +423,16 @@ pub mod catalog {
         listing_entry.label_url = Pubkey::new_from_array(params.label_url);
         listing_entry.listing_url = Pubkey::new_from_array(params.listing_url);
         listing_entry.detail_url = Pubkey::new_from_array(params.detail_url);
-        listing_entry.update_count = 1;
+        listing_entry.update_count = 0;
         listing_entry.update_ts = clock.unix_timestamp;
         Ok(())
     }
 
+    // update_listing
+    // publish_update
+    // close_url
+
+    // All checks performed at account level
     pub fn remove_listing(
         _ctx: Context<RemoveListing>,
     ) -> anchor_lang::Result<()> {
@@ -217,8 +514,11 @@ pub mod utils {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, seeds = [program_id.as_ref()], bump, payer = program_admin, space = 16)]
+    #[account(init, seeds = [program_id.as_ref()], bump, payer = program_admin, space = 48)]
     pub root_data: Account<'info, RootData>,
+    /// CHECK: ok
+    #[account(mut, constraint = full_account_zero(&auth_data))]
+    pub auth_data: UncheckedAccount<'info>,
     #[account(constraint = program.programdata_address().unwrap() == Some(program_data.key()))]
     pub program: Program<'info, Catalog>,
     #[account(constraint = program_data.upgrade_authority_address == Some(program_admin.key()))]
@@ -229,42 +529,61 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct CreateCatalog<'info> {
-    #[account(mut, seeds = [program_id.as_ref()], bump)]
-    pub root_data: Account<'info, RootData>,
-    #[account(init, seeds = [b"owner", owner.key().as_ref()], bump, payer = fee_payer, space = 16)]
-    pub catalog_id: Account<'info, CatalogIdentifier>,
-    /// CHECK: ok
-    pub owner: UncheckedAccount<'info>,
+pub struct UpdateMetadata<'info> {
+    #[account(constraint = program.programdata_address().unwrap() == Some(program_data.key()))]
+    pub program: Program<'info, Catalog>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(program_admin.key()))]
+    pub program_data: Account<'info, ProgramData>,
     #[account(mut)]
-    pub fee_payer: Signer<'info>,
+    pub program_admin: Signer<'info>,
+    #[account(init_if_needed, seeds = [program_id.as_ref(), b"metadata"], bump, payer = program_admin, space = 584)]
+    pub program_info: Account<'info, ProgramMetadata>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(_inp_root_nonce: u8)]
+pub struct UpdateRBAC<'info> {
+    #[account(seeds = [program_id.as_ref()], bump = _inp_root_nonce)]
+    pub root_data: Account<'info, RootData>,
+    /// CHECK: ok
+    #[account(mut, constraint = root_data.root_authority == auth_data.key())]
+    pub auth_data: UncheckedAccount<'info>,
+    #[account(constraint = program.programdata_address().unwrap() == Some(program_data.key()))]
+    pub program: Program<'info, Catalog>,
+    pub program_data: Account<'info, ProgramData>,
+    #[account(mut)]
+    pub program_admin: Signer<'info>,
+    /// CHECK: ok
+    pub rbac_user: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(inp_catalog: u64)]
-pub struct ActivateCatalog<'info> {
-    #[account(seeds = [b"owner", owner.key().as_ref()], bump)]
-    pub catalog_id: Account<'info, CatalogIdentifier>,
-    #[account(init, seeds = [b"catalog", inp_catalog.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 113)]
-    pub catalog_inst: Account<'info, CatalogInstance>,
+pub struct CreateCatalog<'info> {
+    #[account(mut, seeds = [program_id.as_ref()], bump)]
+    pub root_data: Account<'info, RootData>,
     /// CHECK: ok
-    #[account(constraint = catalog_id.catalog == inp_catalog)]
-    pub owner: Signer<'info>,
+    #[account(constraint = root_data.root_authority == auth_data.key())]
+    pub auth_data: UncheckedAccount<'info>,
+    pub auth_user: Signer<'info>,
+    #[account(init, seeds = [b"catalog", inp_catalog.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 80)]
+    pub catalog: Account<'info, CatalogInstance>,
+    /// CHECK: ok
+    pub catalog_signer: UncheckedAccount<'info>,
+    /// CHECK: ok
+    pub catalog_manager: UncheckedAccount<'info>,
     #[account(mut)]
     pub fee_payer: Signer<'info>,
-    ///// CHECK: ok
-    //pub net_auth: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(inp_catalog: u64, inp_uuid: u128)]
+#[instruction(inp_uuid: u128)]
 pub struct CreateListing<'info> {
-    #[account(init, seeds = [inp_catalog.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 249)]
+    pub catalog: Account<'info, CatalogInstance>,
+    #[account(init, seeds = [catalog.catalog_id.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 249)]
     pub listing: Account<'info, CatalogEntry>,
-    /// CHECK: ok
-    pub auth_key: UncheckedAccount<'info>,
     pub owner: Signer<'info>,
     /// CHECK: ok
     #[account(address = IX_ID)]
@@ -283,14 +602,16 @@ pub struct CreateListing<'info> {
     pub token_program: UncheckedAccount<'info>,
 }
 
-// TODO: RBAC
 #[derive(Accounts)]
 pub struct RemoveListing<'info> {
+    #[account(constraint = catalog.catalog_id == listing.catalog)]
+    pub catalog: Account<'info, CatalogInstance>,
     #[account(mut, close = fee_recipient)]
     pub listing: Account<'info, CatalogEntry>,
     #[account(mut)]
     pub fee_recipient: Signer<'info>,
-    pub admin: Signer<'info>,
+    #[account(constraint = catalog.manager == auth_user.key())]
+    pub auth_user: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -307,35 +628,33 @@ pub struct CreateURL<'info> {
 #[derive(Default)]
 pub struct RootData {
     pub catalog_count: u64,
-    //pub root_authority: Pubkey,
+    pub root_authority: Pubkey,
 }
-// Size: 8 + 8 = 16
+// Size: 8 + 8 + 32 = 48
 
 impl RootData {
-    pub fn next_catalog_id(&mut self) -> anchor_lang::Result<u64> {
-        let x: u64 = self.catalog_count;
+    pub fn add_catalog(&mut self) -> anchor_lang::Result<()> {
         self.catalog_count = self.catalog_count.checked_add(1).ok_or(error!(ErrorCode::Overflow))?;
-        return Ok(x);
+        Ok(())
+    }
+
+    pub fn root_authority(&self) -> Pubkey {
+        self.root_authority
+    }
+
+    pub fn set_root_authority(&mut self, new_authority: Pubkey) {
+        self.root_authority = new_authority
     }
 }
 
 #[account]
 #[derive(Default)]
-pub struct CatalogIdentifier {
-    pub catalog: u64,
-}
-// Space = 8 + 8 = 16
-
-#[account]
-#[derive(Default)]
 pub struct CatalogInstance {
-    pub catalog: u64,
-    pub catalog_owner: Pubkey,
-    pub catalog_url: Pubkey,
-    pub auth_type: u8,
-    pub net_auth: Pubkey,
+    pub catalog_id: u64,
+    pub signer: Pubkey, // Signer for creating and updating listings
+    pub manager: Pubkey, // Signer for removing
 }
-// Space = 8 + 8 + 32 + 32 + 1 + 32 = 113
+// Space = 8 + 8 + 32 + 32 = 80
 
 #[account]
 #[derive(Default)]
@@ -364,14 +683,34 @@ pub struct CatalogUrl {
 }
 // Space = 8 + 1 + (len) + 4 = 13 + (len)
 
+#[account]
+#[derive(Default)]
+pub struct ProgramMetadata {
+    pub semvar_major: u32,
+    pub semvar_minor: u32,
+    pub semvar_patch: u32,
+    pub program: Pubkey,
+    pub program_name: String,   // Max len 60
+    pub developer_name: String, // Max len 60
+    pub developer_url: String,  // Max len 124
+    pub source_url: String,     // Max len 124
+    pub verify_url: String,     // Max len 124
+}
+// 8 + (4 * 3) + (4 * 5) + (64 * 2) + (128 * 3) + 32
+// Data length (with discrim): 584 bytes
+
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Access denied")]
+    AccessDenied,
     #[msg("Invalid URL hash")]
     InvalidURLHash,
     #[msg("Invalid URL length")]
     InvalidURLLength,
     #[msg("Invalid parameters")]
     InvalidParameters,
+    #[msg("Internal error")]
+    InternalError,
     #[msg("Overflow")]
     Overflow,
 }
