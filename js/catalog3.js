@@ -241,7 +241,7 @@ async function main() {
                 "@type": "Organization",
                 "address": {
                     "@type": "PostalAddress",
-                    "streetAddress": "40643 Grimmer Blvd",
+                    "streetAddress": "40643 Grimmer Blvd.",
                     "addressLocality": "Fremont",
                     "addressRegion": "CA",
                     "postalCode": "94538",
