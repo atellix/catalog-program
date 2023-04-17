@@ -15,7 +15,7 @@ use sha3::{Shake128, digest::{Update, ExtendableOutput, XofReader}};
 extern crate slab_alloc;
 use slab_alloc::{ SlabPageAlloc, CritMapHeader, CritMap, AnyNode, LeafNode, SlabVec, SlabTreeError };
 
-declare_id!("6vbofg2ka2zH39MMmotzwiZYJu8BMeeZFx2ermHKmyVf");
+declare_id!("FQs77rQ5vFvKGXa4UaJa6HU2UATFt5awLk6Xx6M7isFj");
 
 pub const VERSION_MAJOR: u32 = 1;
 pub const VERSION_MINOR: u32 = 0;

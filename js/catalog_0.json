@@ -1,8 +1,8 @@
 {
-    "id": "00",
-    "signer": "J3AdJrWgF9EJFaw3LYRbBTo543PnXmbfmxDBnLryD5i5",
-    "signer_secret": "8235xgzhqydtrjb8txvdsfrz4mswg82m5ktqv43b0faknktt9crft95s718demkcf78vxh65h28njnb595c2sf3hjhjespq1cnht87g",
-    "manager": "9P8fXp7jPJA1L7juQprKM1HNgeXexcaEFeTTB85HsJht",
-    "manager_secret": "t6gs5cvjwzsjrxh176bhxm9xfm80jypj48yg6mhrnkmzqyj59d5qs27geqbqh6pwda8tft5rvnr39dm3zkjcn7k8822bzsn4ypcq5dr",
-    "catalog": "o6KzRgGGBqRE6ZMBGjBnM1x64vv3ot1AWeZjwtoch3k"
+    "id": "0",
+    "signer": "AhtPqBMp3AMKvyWyU96gnfarZmu5KBW6G8LrApvisfsM",
+    "signer_secret": "pgf97nnw60g60jhyc40ga14qjage1vj8qd4pwpnn4b74gygttn3s0cm6j80abk6fmmq9ctf0s19sv48m1ftynwcargf4yczgdrj5700",
+    "manager": "6DsztSiiSECEsdouVah1XNCghkRPxFnu6pzn5EZWK9yR",
+    "manager_secret": "z6wanpzhcwc0sx7t1m650m5qdqb0mst27ff948jdsasm752fsbtmv5rhd774tw0x6pb129re9rmn7bcwffyea7n4pd7kys3bb2kb3j0",
+    "catalog": "Csr3MMWE2u7rsCyfx9XkYqvAWpSsHcZkPZPPJqmCBuAX"
 }
