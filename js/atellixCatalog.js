@@ -5,11 +5,7 @@ var showProduct = function () {
     console.log('Hello, world!');
 };
 exports.showProduct = showProduct;
-/*export interface IPerson extends IThing {
-    name: string;
-}
-
-export interface IJobPosting extends IThing {
+/*export interface IJobPosting extends IThing {
     name: string;
 }
 

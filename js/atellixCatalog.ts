@@ -256,11 +256,7 @@ export interface IOrganization extends IContact {
     subOrganization?: Array<IOrganization>;
 }
 
-/*export interface IPerson extends IThing {
-    name: string;
-}
-
-export interface IJobPosting extends IThing {
+/*export interface IJobPosting extends IThing {
     name: string;
 }
 
