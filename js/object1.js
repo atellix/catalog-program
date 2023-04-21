@@ -37,7 +37,12 @@ async function main() {
         duration: '1 Hour',
         startDate: getBeginningOfDay(new Date()),
         image: [
-            { id: 'https://www.gravatar.com/avatar/c9cb338a29d608d33e16ff3f2e7f9635?s=64&d=identicon&r=PG' },
+            {
+                url: 'https://www.gravatar.com/avatar/c9cb338a29d608d33e16ff3f2e7f9635?s=64&d=identicon&r=PG',
+                image: [
+                    { url: 'https://www.gravatar.com/avatar/c9cb338a29d608d33e16ff3f2e7f9635?s=64&d=identicon&r=PG' },
+                ],
+            }
         ],
     }
     console.log(obj)
@@ -55,7 +60,7 @@ async function main() {
     })
     writer.end((error, result) => console.log(result))
     const rsrc = builder.decodeResource(store, type, obj.id, {})
-    console.log(rsrc)
+    console.log(JSON.stringify(rsrc, null, 4))
 }
 
 console.log('Begin')
