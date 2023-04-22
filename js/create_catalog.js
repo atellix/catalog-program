@@ -1,6 +1,6 @@
 const { Buffer } = require('buffer')
 const { PublicKey, SystemProgram } = require('@solana/web3.js')
-const anchor = require('@project-serum/anchor')
+const anchor = require('@coral-xyz/anchor')
 
 const { programAddress, importSecretKey, exportSecretKey, jsonFileRead, jsonFileWrite } = require('../../js/atellix-common')
 

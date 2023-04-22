@@ -37,7 +37,9 @@ CATALOGS = {
 decoder = krock32.Decoder(strict=False, checksum=False)
 decoder.update('pgf97nnw60g60jhyc40ga14qjage1vj8qd4pwpnn4b74gygttn3s0cm6j80abk6fmmq9ctf0s19sv48m1ftynwcargf4yczgdrj5700')
 KEYPAIR = Keypair.from_bytes(decoder.finalize())
-PROGRAM = Pubkey.from_string('FQs77rQ5vFvKGXa4UaJa6HU2UATFt5awLk6Xx6M7isFj')
+PROGRAM = 'FQs77rQ5vFvKGXa4UaJa6HU2UATFt5awLk6Xx6M7isFj'
+FEE_MINT = 'USDVXgXZcQWycX4PAu2CZbGaSG1Ft5rNjo4ARpoqw7w'
+FEE_ACCOUNT = '6sGyBbpzTBaJ5U1kxmdhA9wpfxjcVQ5mymUJcWFCqwSt'
 
 app = Flask(__name__)
 
@@ -50,7 +52,7 @@ def to_text_account(text_string, fill_mode=0):
     shake.update(text_string.encode('utf8'))
     shake_hash = shake.read(16)
     seeds = [bytes([fill_mode]), shake_hash]
-    pda = Pubkey.find_program_address(seeds, PROGRAM)
+    pda = Pubkey.find_program_address(seeds, Pubkey.from_string(PROGRAM))
     #print(text_string)
     #print(str(pda[0]))
     return [int(b) for b in bytes(pda[0])]
@@ -72,10 +74,10 @@ def catalog_listing():
         'latitude': to_byte_array(inp['latitude']),
         'longitude': to_byte_array(inp['longitude']),
         'owner': to_byte_array(inp['owner']),
-        'listing_url': to_text_account(inp['listing_url'][0], inp['listing_url'][1]),
-        'label_url': to_text_account(inp['label_url'][0], inp['label_url'][1]),
-        'detail_url': to_text_account(inp['detail_url'][0], inp['detail_url'][1]),
-        'fee_account': to_byte_array(inp['fee_account']),
+        'listing_url': to_text_account(inp['listing_url']['text'], inp['listing_url']['expand']),
+        'label_url': to_text_account(inp['label_url']['text'], inp['label_url']['expand']),
+        'detail_url': to_text_account(inp['detail_url']['text'], inp['detail_url']['expand']),
+        'fee_account': [int(b) for b in bytes(Pubkey.from_string(FEE_ACCOUNT))],
         'fee_tokens': 0,
     }
     serialized_bytes = borsh.serialize(LISTING_SCHEMA, listing_data)
@@ -86,6 +88,8 @@ def catalog_listing():
     res['pubkey'] = str(KEYPAIR.pubkey())
     res['sig'] = str(KEYPAIR.sign_message(serialized_bytes))
     res['message'] = base64.b64encode(serialized_bytes).decode('utf8')
+    res['fee_mint'] = FEE_MINT
+    res['fee_account'] = FEE_ACCOUNT
     #print(res)
     return jsonify(res)
 

@@ -1,4 +1,4 @@
-const anchor = require('@project-serum/anchor')
+const anchor = require('@coral-xyz/anchor')
 const jsSHA = require('jssha')
 const bs58 = require('bs58')
 

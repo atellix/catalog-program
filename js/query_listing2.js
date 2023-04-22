@@ -10,8 +10,11 @@ const BitSet = require('bitset')
 //const exec = promisify(require('child_process').exec)
 //const fs = require('fs').promises
 
+const { fetchJson, jsonldToGraph, ObjectBuilder, abstractDefinitionMap } = require('@atellix/catalog')
+
 const { programAddress, jsonFileRead } = require('../../js/atellix-common')
 
+const builder = new ObjectBuilder(abstractDefinitionMap)
 const provider = anchor.AnchorProvider.env()
 anchor.setProvider(provider)
 const catalogProgram = anchor.workspace.Catalog
@@ -156,7 +159,21 @@ async function main() {
             'update_count': parseInt(listingData.updateCount.toString()),
             'update_ts': new Date(1000 * parseInt(listingData.updateTs.toString())),
         }
-        console.log(rec)
+        //console.log(rec)
+        const jr = await fetchJson(rec.url, null, 'GET')
+        //console.log(jr)
+
+        const jstxt = JSON.stringify(jr.data)
+        //console.log(jstxt)
+        const graph = await jsonldToGraph(jstxt)
+        const mainId = builder.getUriForUUID(graph, jr.record_uuid)
+        console.log(mainId)
+        const mainType = builder.getType(graph, mainId)
+        if (mainId) {
+            const jsres = builder.decodeResource(graph, mainType, mainId, {})
+            console.log(rec, jsres)
+        }
+ 
         /*console.log('UUID: ' + uuidstr(listingData.uuid.toBuffer().toJSON().data))
         console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
         console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.detailUrl)).substring(5)))

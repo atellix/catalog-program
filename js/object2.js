@@ -9,13 +9,15 @@ const BitSet = require('bitset')
 const borsh = require('borsh')
 const bufLayout = require('buffer-layout')
 const base64js = require('base64-js')
-const fetch = require('node-fetch')
+//const fetch = require('node-fetch')
 const N3 = require('N3')
 const { namedNode, literal, quad } = N3.DataFactory
 
-const { ListingClient } = require('@atellix/catalog')
+const { ListingClient, ObjectBuilder, abstractDefinitionMap, getBeginningOfDay, graphToJsonld } = require('@atellix/catalog')
 
 const { programAddress, associatedTokenAddress, jsonFileRead, importSecretKey } = require('../../js/atellix-common')
+
+const builder = new ObjectBuilder(abstractDefinitionMap)
 
 const provider = anchor.AnchorProvider.env()
 anchor.setProvider(provider)
@@ -24,7 +26,28 @@ const catalogProgramPK = catalogProgram.programId
 
 async function main() {
     console.log('Main')
+    const url = 'http://127.0.0.1:7501/api/catalog/listing'
     const feeMint = new PublicKey('USDVXgXZcQWycX4PAu2CZbGaSG1Ft5rNjo4ARpoqw7w')
+    const type = 'IEvent'
+    const baseUri = 'http://example.com/event/'
+    const obj = {
+        id: baseUri + '1',
+        name: 'Birthday Party',
+        description: 'Mikes Birthday Party',
+        duration: '1 Hour',
+        startDate: getBeginningOfDay(new Date()),
+        image: [
+            { url: 'https://www.gravatar.com/avatar/c9cb338a29d608d33e16ff3f2e7f9635?s=64&d=identicon&r=PG' },
+        ],
+        isAccessibleForFree: true,
+    }
+    //console.log(obj)
+    const store = new N3.Store()
+    builder.buildResource(store, type, obj.id, obj, {})
+
+    const objText = await graphToJsonld(store, baseUri)
+    console.log(objText)
+
     const walletToken = await associatedTokenAddress(provider.wallet.publicKey, feeMint)
     const walletTokenPK = new PublicKey(walletToken.pubkey)
 
@@ -33,27 +56,15 @@ async function main() {
     const listingSpec = lc.getListingSpec({
         catalog: 'commerce',
         base: 'http://173.234.24.74:9500/api/catalog/listing/',
-        category: 'http://www.productontology.org/doc/Massage',
-        label: 'MoodUp Wellness',
+        category: 'http://schema.org/Event',
+        label: obj.name,
         detail: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "Organization",
-            "address": {
-                "@type": "PostalAddress",
-                "streetAddress": "40643 Grimmer Blvd.",
-                "addressLocality": "Fremont",
-                "addressRegion": "CA",
-                "postalCode": "94538",
-                "addressCountry": "USA",
-            },
-            "email": "some@body.com",
-            "telephone": "+14519943344",
+            "@type": "Event",
         }),
         attributes: [
             'InPerson',
         ],
-        latitude: 37.535557,
-        longitude: -121.9840115,
         locality: [
             'https://www.geonames.org/6252001/', // United States
             'https://www.geonames.org/5332921/', // California
@@ -62,7 +73,7 @@ async function main() {
         owner: provider.wallet.publicKey,
     })
     //console.log(listingSpec)
-    const li = await lc.getListingInstructions(fetch, listingUrl, listingSpec, provider.wallet.publicKey, walletTokenPK)
+    const li = await lc.getListingInstructions(listingUrl, listingSpec, provider.wallet.publicKey, walletTokenPK)
     console.log(li)
     console.log(await lc.sendListingInstructions(li))
 }

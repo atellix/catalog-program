@@ -1,6 +1,6 @@
 const { Buffer } = require('buffer')
 const { v4: uuidv4, parse: uuidparse } = require('uuid')
-const anchor = require('@project-serum/anchor')
+const anchor = require('@coral-xyz/anchor')
 const { Keypair, PublicKey, Transaction, Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram } = require('@solana/web3.js')
 const jsSHA = require('jssha')
 const BitSet = require('bitset')

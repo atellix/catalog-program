@@ -1,4 +1,4 @@
-const anchor = require('@project-serum/anchor')
+const anchor = require('@coral-xyz/anchor')
 const { PublicKey, SystemProgram } = require('@solana/web3.js')
 const { promisify } = require('util')
 const exec = promisify(require('child_process').exec)
