@@ -10,7 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "@atellix/catalog": "file:../../../atellix/monorepo/packages/catalog/dist/cjs",
-    "@atellix/serializer-jsonld-ext": "file:../../../atellix/monorepo/packages/serializer-jsonld-ext/dist/cjs",
     "@coral-xyz/anchor": "^0.27.0",
     "@rdfjs/serializer-jsonld-ext": "^4.0.0",
     "@solana/spl-token": "^0.3.7",
