@@ -104,8 +104,8 @@ async function main() {
     if (true) {
         var local = [
             //'https://www.geonames.org/6251999/', // Canada
-            'https://www.geonames.org/6252001/', // USA
-            'https://www.geonames.org/5332921/', // California
+            //'https://www.geonames.org/6252001/', // USA
+            //'https://www.geonames.org/5332921/', // California
         ]
         for (var i = 0; i < local.length; i++) {
             var localHash = getHashBN(local[i])
@@ -168,9 +168,8 @@ async function main() {
         const graph = await jsonldToGraph(jstxt)
         const mainId = builder.getUriForUUID(graph, jr.record_uuid)
         console.log(mainId)
-        const mainType = builder.getType(graph, mainId)
         if (mainId) {
-            const jsres = builder.decodeResource(graph, mainType, mainId, {})
+            const jsres = builder.decodeResource(graph, mainId, {})
             console.log(rec, jsres)
         }
  

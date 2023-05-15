@@ -11,8 +11,24 @@
         "uri": "https://www.geonames.org/5350736/",
         "label": "Fremont"
     },
-    "7ZVFNhYE6FFoMzze7noL4Q": {
-        "uri": "http://www.productontology.org/doc/Massage",
+    "KNoiAo77XPmHc1uqmN5L6j": {
+        "uri": "https://www.geonames.org/2750405/",
+        "label": "Netherlands"
+    },
+    "Wie3cg3z5fvtq5sEK6ykkk": {
+        "uri": "https://www.geonames.org/2749879/",
+        "label": "North Holland"
+    },
+    "DonvbbWrCsUXPmC2h1cQzT": {
+        "uri": "https://www.geonames.org/2744118/",
+        "label": "Zaandam"
+    },
+    "TvwurgzoWJNGWoSi2wPijE": {
+        "uri": "http://www.productontology.org/id/Massage",
         "label": "Massage"
+    },
+    "TjyfLeS531gUwJZ8i4RLAz": {
+        "uri": "http://schema.org/Event",
+        "label": "Event"
     }
 }

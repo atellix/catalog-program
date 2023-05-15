@@ -14,7 +14,11 @@ var uris = [
     ['https://www.geonames.org/6252001/', 'United States'],
     ['https://www.geonames.org/5332921/', 'California'],
     ['https://www.geonames.org/5350736/', 'Fremont'],
-    ['http://www.productontology.org/doc/Massage', 'Massage'],
+    ['https://www.geonames.org/2750405/', 'Netherlands'],
+    ['https://www.geonames.org/2749879/', 'North Holland'],
+    ['https://www.geonames.org/2744118/', 'Zaandam'],
+    ['http://www.productontology.org/id/Massage', 'Massage'],
+    ['http://schema.org/Event', 'Event'],
 ]
 
 var res = {}
