@@ -55,14 +55,9 @@ async function decodeURL(listingData, urlEntry) {
 function readAttributes(attrValue) {
     var hval = attrValue.toString(16)
     var attributes = [
-        'CommerceEngine',
-        'EmploymentRelated',
-        'Event',
         'InPerson',
         'LocalDelivery',
         'OnlineDownload',
-        'Organization',
-        'Person',
     ]
     var bset = BitSet('0x' + hval)
     var attrs = {}
@@ -167,7 +162,7 @@ async function main() {
         //console.log(jstxt)
         const graph = await jsonldToGraph(jstxt)
         const mainId = builder.getUriForUUID(graph, jr.record_uuid)
-        console.log(mainId)
+        //console.log(mainId)
         if (mainId) {
             const jsres = builder.decodeResource(graph, mainId, {})
             console.log(rec, jsres)

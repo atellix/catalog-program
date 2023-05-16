@@ -23,7 +23,6 @@ async function main() {
     var listing = process.argv[2]
     const lstData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(listing))
     const catData = await jsonFileRead('catalog_' + lstData.catalog.toString() + '.json')
-    var kp = importSecretKey(catData.manager_secret)
 
     console.log('Remove Listing: ' + listing)
     console.log(await catalogProgram.rpc.removeListing(
@@ -31,13 +30,12 @@ async function main() {
             'accounts': {
                 rootData: new PublicKey(rootData.pubkey),
                 authData: rootAccount.rootAuthority,
-                authUser: kp.publicKey,
+                authUser: provider.wallet.publicKey,
                 catalog: new PublicKey(catData.catalog),
                 listing: new PublicKey(listing),
                 feeRecipient: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,
             },
-            'signers': [kp],
         },
     ))
 }

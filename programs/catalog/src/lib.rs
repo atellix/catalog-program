@@ -610,7 +610,7 @@ pub struct RemoveListing<'info> {
     pub listing: Account<'info, CatalogEntry>,
     #[account(mut)]
     pub fee_recipient: Signer<'info>,
-    #[account(constraint = catalog.manager == auth_user.key())]
+    #[account(constraint = catalog.manager == auth_user.key() || listing.owner == auth_user.key())]
     pub auth_user: Signer<'info>,
 }
 
