@@ -6,5 +6,6 @@ target
 node_modules
 js/node_modules/*
 js/catalog-*.json
+js/catalog_*.json
 *.swp
 *.swo

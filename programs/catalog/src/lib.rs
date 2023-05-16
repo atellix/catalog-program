@@ -15,7 +15,7 @@ use sha3::{Shake128, digest::{Update, ExtendableOutput, XofReader}};
 extern crate slab_alloc;
 use slab_alloc::{ SlabPageAlloc, CritMapHeader, CritMap, AnyNode, LeafNode, SlabVec, SlabTreeError };
 
-declare_id!("CTLG5CZje37UKZ7UvXiXy1WnJs37npJHxkYXFsEcCCc1");
+declare_id!("CTLGp9JpcXCJZPqdn2W73c74DTsCTS8EFEedd7enU8Mv");
 
 pub const VERSION_MAJOR: u32 = 1;
 pub const VERSION_MINOR: u32 = 0;
@@ -356,6 +356,7 @@ pub mod catalog {
         root_data.add_catalog()?;
         let cinst = &mut ctx.accounts.catalog;
         cinst.catalog_id = inp_catalog;
+        cinst.catalog_counter = 0;
         cinst.signer = ctx.accounts.catalog_signer.key();
         cinst.manager = ctx.accounts.catalog_manager.key();
         msg!("Atellix: Created Catalog ID: {}", cinst.catalog_id);
@@ -389,7 +390,7 @@ pub mod catalog {
         inp_uuid: u128,
     ) -> anchor_lang::Result<()> {
         let clock = Clock::get()?;
-        let catalog = &ctx.accounts.catalog;
+        let catalog = &mut ctx.accounts.catalog;
         let ix: Instruction = load_instruction_at_checked(0, &ctx.accounts.ix_sysvar)?;
         let (pk, req) = utils::verify_ed25519_ix(&ix, 265)?;
         let params = CatalogParameters::try_from_slice(&req).unwrap();
@@ -420,11 +421,13 @@ pub mod catalog {
         listing_entry.latitude = i32::from_le_bytes(params.latitude);
         listing_entry.longitude = i32::from_le_bytes(params.longitude);
         listing_entry.owner = owner;
-        listing_entry.label_url = Pubkey::new_from_array(params.label_url);
+        listing_entry.listing_idx = catalog.catalog_counter;
         listing_entry.listing_url = Pubkey::new_from_array(params.listing_url);
         listing_entry.detail_url = Pubkey::new_from_array(params.detail_url);
+        listing_entry.label_url = Pubkey::new_from_array(params.label_url);
         listing_entry.update_count = 0;
         listing_entry.update_ts = clock.unix_timestamp;
+        catalog.catalog_counter = catalog.catalog_counter.checked_add(1).ok_or(error!(ErrorCode::Overflow))?;
         Ok(())
     }
 
@@ -567,7 +570,7 @@ pub struct CreateCatalog<'info> {
     #[account(constraint = root_data.root_authority == auth_data.key())]
     pub auth_data: UncheckedAccount<'info>,
     pub auth_user: Signer<'info>,
-    #[account(init, seeds = [b"catalog", inp_catalog.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 80)]
+    #[account(init, seeds = [b"catalog", inp_catalog.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 88)]
     pub catalog: Account<'info, CatalogInstance>,
     /// CHECK: ok
     pub catalog_signer: UncheckedAccount<'info>,
@@ -581,8 +584,9 @@ pub struct CreateCatalog<'info> {
 #[derive(Accounts)]
 #[instruction(inp_uuid: u128)]
 pub struct CreateListing<'info> {
+    #[account(mut)]
     pub catalog: Account<'info, CatalogInstance>,
-    #[account(init, seeds = [catalog.catalog_id.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 249)]
+    #[account(init, seeds = [catalog.catalog_id.to_be_bytes().as_ref(), inp_uuid.to_be_bytes().as_ref()], bump, payer = fee_payer, space = 257)]
     pub listing: Account<'info, CatalogEntry>,
     pub owner: Signer<'info>,
     /// CHECK: ok
@@ -651,10 +655,11 @@ impl RootData {
 #[derive(Default)]
 pub struct CatalogInstance {
     pub catalog_id: u64,
+    pub catalog_counter: u64,
     pub signer: Pubkey, // Signer for creating and updating listings
     pub manager: Pubkey, // Signer for removing
 }
-// Space = 8 + 8 + 32 + 32 = 80
+// Space = 8 + 8 + 8 + 32 + 32 = 88
 
 #[account]
 #[derive(Default)]
@@ -669,11 +674,12 @@ pub struct CatalogEntry {
     pub update_ts: i64,
     pub update_count: u64,
     pub owner: Pubkey,
+    pub listing_idx: u64,
     pub listing_url: Pubkey,
     pub label_url: Pubkey,
     pub detail_url: Pubkey,
 }
-// Space = 8 + 16 + 8 + 16 + (16 * 3) + 1 + 4 + 4 + 8 + 8 + (32 * 4) = 249
+// Space = 8 + 16 + 8 + 16 + (16 * 3) + 1 + 4 + 4 + 8 + 8 + 8 + (32 * 4) = 257
 
 #[account]
 #[derive(Default)]

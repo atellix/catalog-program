@@ -72,7 +72,7 @@ function readAttributes(attrValue) {
 async function main() {
     var uriLookup = await jsonFileRead('uris.json')
     //var categoryUri = 'http://www.productontology.org/doc/Massage'
-    var categoryUri = 'http://schema.org/Event'
+    var categoryUri = 'http://rdf.atellix.net/1.0/catalog/event/conference'
     var category = getHashBN(categoryUri)
     var offset = 0
     var prefix = []

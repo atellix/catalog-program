@@ -80,7 +80,7 @@ async function main() {
     const listingSpec = lc.getListingSpec({
         catalog: 'commerce',
         base: 'http://173.234.24.74:9500/api/catalog/listing/',
-        category: 'http://schema.org/Event',
+        category: 'http://rdf.atellix.net/1.0/catalog/event/conference',
         label: obj.name,
         detail: JSON.stringify({
             "@context": "http://schema.org",
@@ -90,9 +90,7 @@ async function main() {
             'InPerson',
         ],
         locality: [
-            'https://www.geonames.org/2750405/', // Netherlands
-            'https://www.geonames.org/2749879/', // North Holland
-            'https://www.geonames.org/2744118/', // Zaandam
+            'http://rdf.atellix.net/1.0/geo/2750405/NL/Netherlands', // Netherlands
         ],
         owner: provider.wallet.publicKey,
     })
