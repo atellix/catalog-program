@@ -437,8 +437,14 @@ pub mod catalog {
 
     // All checks performed at account level
     pub fn remove_listing(
-        _ctx: Context<RemoveListing>,
+        ctx: Context<RemoveListing>,
     ) -> anchor_lang::Result<()> {
+        emit!(RemoveListingEvent {
+            user: ctx.accounts.auth_user.key(),
+            catalog: ctx.accounts.catalog.catalog_id,
+            listing: ctx.accounts.listing.key(),
+            listing_idx: ctx.accounts.listing.listing_idx,
+        });
         Ok(())
     }
 }
@@ -704,6 +710,14 @@ pub struct ProgramMetadata {
 }
 // 8 + (4 * 3) + (4 * 5) + (64 * 2) + (128 * 3) + 32
 // Data length (with discrim): 584 bytes
+
+#[event]
+pub struct RemoveListingEvent {
+    pub user: Pubkey,
+    pub catalog: u64,
+    pub listing: Pubkey,
+    pub listing_idx: u64,
+}
 
 #[error_code]
 pub enum ErrorCode {
