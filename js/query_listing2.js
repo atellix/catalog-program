@@ -72,7 +72,8 @@ function readAttributes(attrValue) {
 async function main() {
     var uriLookup = await jsonFileRead('uris.json')
     //var categoryUri = 'http://www.productontology.org/doc/Massage'
-    var categoryUri = 'http://rdf.atellix.net/1.0/catalog/event/conference'
+    //var categoryUri = 'http://rdf.atellix.net/1.0/catalog/event/conference'
+    var categoryUri = 'http://www.productontology.org/id/Computer'
     var category = getHashBN(categoryUri)
     var offset = 0
     var prefix = []
@@ -154,7 +155,7 @@ async function main() {
             'update_count': parseInt(listingData.updateCount.toString()),
             'update_ts': new Date(1000 * parseInt(listingData.updateTs.toString())),
         }
-        //console.log(rec)
+        console.log(rec)
         const jr = await fetchJson(rec.url, null, 'GET')
         //console.log(jr)
 
