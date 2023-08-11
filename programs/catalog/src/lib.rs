@@ -431,9 +431,9 @@ pub mod catalog {
         Ok(())
     }
 
-    // update_listing
-    // publish_update
-    // close_url
+    // TODO: update_listing
+    // TODO: publish_update
+    // TODO: close_url
 
     // All checks performed at account level
     pub fn remove_listing(
