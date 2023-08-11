@@ -11,9 +11,13 @@ const catalogProgramPK = catalogProgram.programId
 
 async function main() {
     console.log('Main')
-    const apiBase = 'http://173.234.24.74:9500'
-    const lc = new ListingClient(provider, catalogProgram, apiBase)
-    await lc.syncMerchant()
+    const baseUrl = 'https://cat-dev1.atellix.net'
+    const authUrl = 'https://atx2.atellix.net'
+    const apiKey = 'efe866bb31ce43c8b7aa386ae013c11f40114bdfa1f34dfe939351fdc6b1f7cc'
+    const lc = new ListingClient(provider, catalogProgram, baseUrl, authUrl, apiKey)
+    lc.accessToken = await lc.getToken()
+    console.log(lc.accessToken)
+    //await lc.syncListings(provider.wallet, provider.wallet, 'commerce')
 }
 
 console.log('Begin')

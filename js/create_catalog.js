@@ -44,6 +44,49 @@ async function main() {
     const manager = anchor.web3.Keypair.generate()
     const signer = anchor.web3.Keypair.generate()
     const catalogs = [
+        // 0 - metadata
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 1 - public
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 2 - commerce
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 3 - event
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 4 - realestate
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 5 - investment
+        {
+            'signer': signer.publicKey,
+            'manager': manager.publicKey,
+            'payer': provider.wallet.publicKey,
+            'admin': admin,
+        },
+        // 6 - employment
         {
             'signer': signer.publicKey,
             'manager': manager.publicKey,

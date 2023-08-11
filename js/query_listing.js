@@ -17,6 +17,8 @@ anchor.setProvider(provider)
 const catalogProgram = anchor.workspace.Catalog
 const catalogProgramPK = catalogProgram.programId
 
+//console.log(catalogProgramPK.toString())
+
 function getHashBN(val) {
     var shaObj = new jsSHA("SHAKE128", "TEXT", { encoding: "UTF8" })
     var hashData = shaObj.update(val).getHash("UINT8ARRAY", { outputLen: 128})
@@ -74,8 +76,8 @@ function readAttributes(attrValue) {
 async function main() {
     var uriLookup = await jsonFileRead('uris.json')
     //var categoryUri = 'http://www.productontology.org/doc/Massage'
-    var categoryUri = 'http://schema.org/Event'
-    var category = getHashBN(categoryUri)
+    //var categoryUri = 'http://schema.org/Event'
+    //var category = getHashBN(categoryUri)
     var offset = 0
     var prefix = []
 
@@ -84,21 +86,21 @@ async function main() {
     // Category Offset = 32
     // Filter By Offset = 48
 
-    //offset = 24
+    offset = 24
     var catbuf = Buffer.alloc(8)
-    catbuf.writeBigUInt64LE(BigInt(1))
-    //prefix = prefix.concat(catbuf.toJSON().data)
+    catbuf.writeBigUInt64LE(BigInt(2))
+    prefix = prefix.concat(catbuf.toJSON().data)
 
     // Category filter
-    offset = 32
+    /*offset = 32
     var catdata = category.toBuffer().toJSON().data
     catdata.reverse() // Borsh uses little-endian integers
-    prefix = prefix.concat(catdata)
+    prefix = prefix.concat(catdata)*/
 
     //var start = [0x27, 0xea, 0xf9, 0x5e, 0x28, 0x32, 0xf4, 0x49]
     //prefix = prefix.concat(start)
 
-    if (true) {
+    if (false) {
         var local = [
             //'https://www.geonames.org/6251999/', // Canada
             'https://www.geonames.org/6252001/', // USA
@@ -120,11 +122,18 @@ async function main() {
     })
     for (var i = 0; i < query.length; i++) {
         var act = query[i]
-        console.log('Found: ' + act.pubkey.toString())
 
         //var listingId = '3c57b887-96c3-4263-b437-39420c7ea541'
         //var listingBuf = Buffer.from(uuidparse(listingId))
-        var listingData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(act.pubkey))
+        var listingData = false
+        try {
+            listingData = await catalogProgram.account.catalogEntry.fetch(new PublicKey(act.pubkey))
+        } catch (error) {
+            console.log(error)
+        }
+        if (!listingData) {
+            continue
+        }
         //console.log(listingData)
         var lat = null
         var lon = null
@@ -143,7 +152,7 @@ async function main() {
             }
         }
         var rec = {
-            'category': categoryUri,
+            //'category': categoryUri,
             'locality': locality,
             'url': await decodeURL(listingData, listingData.listingUrl),
             'uuid': uuidstr(listingData.uuid.toBuffer().toJSON().data),
@@ -156,7 +165,8 @@ async function main() {
             'update_count': parseInt(listingData.updateCount.toString()),
             'update_ts': new Date(1000 * parseInt(listingData.updateTs.toString())),
         }
-        console.log(rec)
+        console.log('Found: ' + act.pubkey.toString() + ' ' + rec['label'] + ' ' + rec['uuid'])
+        //console.log(rec)
         /*console.log('UUID: ' + uuidstr(listingData.uuid.toBuffer().toJSON().data))
         console.log('Label: ' + decodeURIComponent((await decodeURL(listingData, listingData.labelUrl)).substring(5)))
         console.log('Address: ' + decodeURIComponent((await decodeURL(listingData, listingData.detailUrl)).substring(5)))
